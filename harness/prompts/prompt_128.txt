@@ -1,0 +1,3 @@
+You are reading a technical description of an operating system scheduling problem. Read it carefully and then write a detailed analysis.
+
+Modern processors have abandoned the assumption that all cores are equal. A contemporary hybrid desktop or laptop processor combines a small number of wide, aggressively clocked performance cores with a larger number of narrow, efficient cores that occupy far less die area. The performance cores support simultaneous multithreading, so each physical core exposes two logical execution contexts that share the same functional units, the same level one cache, and the same level two cache. The efficient cores do not support simultaneous multithreading at all, and instead are grouped 

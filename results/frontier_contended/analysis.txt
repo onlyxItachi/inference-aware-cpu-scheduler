@@ -1,0 +1,49 @@
+====================================================================================
+### RAKİPLİ SENARYO — statik cephe + SWITCH
+====================================================================================
+      kol   n      TTFT   ITLp50   ITLp95   ITLp99    tps  geçiş  rakipHız   J/tok
+------------------------------------------------------------------------------------
+     A_P8   6     14421   108.89   250.26   269.60   7.84   17.0    0.3477  16.018
+    P8_E2   6     13794   113.49   268.42   294.60   7.42   17.0    0.3384  16.413
+    P8_E4   6     13196   119.31   276.05   309.84   7.12   17.0    0.3320  16.672
+    P8_E6   6     13085   121.76   280.82   320.67   6.98   17.0    0.3294  16.828
+  C_P8_E8   6     12628   122.01   284.06   328.69   6.92   17.0    0.3302  16.796
+   SWITCH   6     12623   108.30   247.47   269.59   7.84   16.0    0.3395  15.399
+
+### BU SENARYONUN GÜRÜLTÜ TABANI (kol-içi CV medyanı)
+  ttft_ms        %0.64
+  itl_p50_ms     %0.76
+  itl_p95_ms     %1.36
+  itl_p99_ms     %2.88
+  decode_tps     %0.92
+  build_rate     %0.69
+  j_per_token    %0.59
+
+statik Pareto cephesi: A_P8, P8_E2, P8_E4, C_P8_E8
+baskılanan statikler : P8_E6
+
+### SWITCH'in cephedeki her noktaya karşı durumu
+    karşı                TTFT             ITL p95            sonuç
+--------------------------------------------------------------------
+     A_P8     -12.47% ( iyi)      -1.11% (eşit)       BASKILIYOR
+    P8_E2      -8.49% ( iyi)      -7.80% ( iyi)       BASKILIYOR
+    P8_E4      -4.35% ( iyi)     -10.35% ( iyi)       BASKILIYOR
+  C_P8_E8      -0.04% (eşit)     -12.88% ( iyi)       BASKILIYOR
+
+SWITCH'i baskılayan statik: YOK
+SWITCH cephedeki TÜM noktaları baskılıyor mu: EVET
+
+### RAKİP TARAFI (build_rate, taban %0.69)
+       A_P8 0.3477  A_P8'e karşı % +0.00  (eşit)
+      P8_E2 0.3384  A_P8'e karşı % -2.68  (KÖTÜ)
+      P8_E4 0.3320  A_P8'e karşı % -4.49  (KÖTÜ)
+      P8_E6 0.3294  A_P8'e karşı % -5.26  (KÖTÜ)
+    C_P8_E8 0.3302  A_P8'e karşı % -5.02  (KÖTÜ)
+     SWITCH 0.3395  A_P8'e karşı % -2.36  (KÖTÜ)
+
+### DECODE HASARI BASAMAK MI? (rakipsizdeki bulgu tutuyor mu)
+       A_P8 ITL p50 % +0.00  TTFT % +0.00
+      P8_E2 ITL p50 % +4.22  TTFT % -4.35
+      P8_E4 ITL p50 % +9.57  TTFT % -8.49
+      P8_E6 ITL p50 %+11.82  TTFT % -9.27
+    C_P8_E8 ITL p50 %+12.05  TTFT %-12.43

@@ -1,0 +1,27 @@
+{
+  "32": {
+    "path": "harness/prompts/prompt_32.txt",
+    "actual_tokens": 33,
+    "chars": 196
+  },
+  "128": {
+    "path": "harness/prompts/prompt_128.txt",
+    "actual_tokens": 127,
+    "chars": 722
+  },
+  "256": {
+    "path": "harness/prompts/prompt_256.txt",
+    "actual_tokens": 255,
+    "chars": 1412
+  },
+  "496": {
+    "path": "harness/prompts/prompt_496.txt",
+    "actual_tokens": 493,
+    "chars": 2793
+  },
+  "1024": {
+    "path": "harness/prompts/prompt_1024.txt",
+    "actual_tokens": 1022,
+    "chars": 5785
+  }
+}

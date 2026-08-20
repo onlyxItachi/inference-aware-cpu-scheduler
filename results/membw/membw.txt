@@ -1,0 +1,8 @@
+read   threads= 4    41.15 GB/s  (13.0 ms, best of 5, 537 MB moved)
+triad  threads= 4    51.85 GB/s  (31.1 ms, best of 5, 1611 MB moved)
+read   threads= 8    47.78 GB/s  (11.2 ms, best of 5, 537 MB moved)
+triad  threads= 8    56.97 GB/s  (28.3 ms, best of 5, 1611 MB moved)
+read   threads=16    61.04 GB/s  (8.8 ms, best of 5, 537 MB moved)
+triad  threads=16    52.64 GB/s  (30.6 ms, best of 5, 1611 MB moved)
+read   threads=24    63.63 GB/s  (8.4 ms, best of 5, 537 MB moved)
+triad  threads=24    57.87 GB/s  (27.8 ms, best of 5, 1611 MB moved)

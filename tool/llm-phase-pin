@@ -1,0 +1,373 @@
+#!/usr/bin/env python3
+"""llm-phase-pin — prefill/decode faz farkındalıklı CPU affinity daemon'u.
+
+Bir llama.cpp sunucusunun hangi fazda olduğunu DIŞARIDAN, uygulamaya hiç
+dokunmadan tespit eder ve CPU maskesini ona göre değiştirir:
+
+    prefill  ->  P-core + E-core   (geniş; prefill compute-bound, ölçeklenir)
+    decode   ->  yalnız P-core     (dar; decode bandwidth-bound, E-core
+                                    heterojen bariyer maliyeti getirir)
+
+Sinyal: /proc/<pid>/task/<tid>/sched içindeki nr_switches toplamının
+CPU-saniye başına oranı. Decode her token için tam forward pass yapar ve
+her katmanda thread'leri senkronize eder; prefill tüm promptu tek pass'te
+işler. Aradaki fark ~5 kat ve sabit bir eşikle ayrılabiliyor.
+
+KAPSAM — okumadan kurma:
+  * Yalnızca **OpenMP ile derlenmiş** llama.cpp'de çalışır. GGML_OPENMP=OFF
+    derlemede ggml kendi spin-wait threadpool'unu kullanır, context switch
+    sayısı 6200 kat düşer ve sinyal tamamen kaybolur (ölçüldü).
+  * Kazanç **uzun prefill'li turlarda** gerçekleşir. cache_prompt açık ve
+    kısa mesajlı sohbet turlarında etki ölçülemiyor.
+  * Tek bir donanım/yazılım kombinasyonunda ölçüldü. README'ye bakın.
+
+Yalnızca Python stdlib. Root gerekmez (kendi süreçlerinize affinity
+uygulamak için yeterlidir).
+"""
+
+import argparse
+import glob
+import os
+import re
+import signal
+import sys
+import time
+
+HZ = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
+
+# Ölçülmüş varsayılanlar (bkz. README "Nereden geldi bu sayılar").
+DEF_HI = 3000.0          # ctx/CPU-s: bunun üstü decode
+DEF_LO = 2100.0          # ctx/CPU-s: bunun altı prefill (histerezis)
+DEF_K = 2                # kaç ardışık örnek gerekli
+DEF_INTERVAL_MS = 100.0  # örnekleme periyodu; %1.7 çekirdek maliyeti
+DEF_MIN_PREFILL_MS = 300.0
+
+
+def log(msg, *, quiet=False):
+    if not quiet:
+        print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+# --------------------------------------------------------------- topoloji
+
+def detect_topology():
+    """P-core / E-core ayrımını sysfs'ten çıkarır.
+
+    Hibrit Intel parçalarında çekirdek tipi cpu_capacity veya
+    cpuinfo_max_freq ile ayrılır: P-core'lar daha yüksek tepe frekansına
+    (ve kapasiteye) sahiptir. Hiçbiri yoksa tek tip kabul edilir.
+
+    CPU numaraları makineye göre değişir; hard-code edilmez.
+    """
+    cpus = sorted(
+        int(re.search(r"/cpu(\d+)$", p).group(1))
+        for p in glob.glob("/sys/devices/system/cpu/cpu[0-9]*")
+        if re.search(r"/cpu\d+$", p)
+    )
+    if not cpus:
+        return [], [], "cpu listesi okunamadı"
+
+    def read_int(path):
+        try:
+            with open(path) as f:
+                return int(f.read().strip())
+        except (OSError, ValueError):
+            return None
+
+    # İki aday kaynak var ve hangisinin işe yarayacağı makineye bağlı:
+    # bu Raptor Lake'te cpu_capacity var ama hepsinde 1024 (doldurulmamış),
+    # ayrımı cpuinfo_max_freq yapıyor. ARM big.LITTLE'da tersi olur.
+    # O yüzden ikisini de oku ve GERÇEKTEN ayrım yapanı seç.
+    sources = [
+        ("cpu_capacity", "/sys/devices/system/cpu/cpu{}/cpu_capacity"),
+        ("cpuinfo_max_freq",
+         "/sys/devices/system/cpu/cpu{}/cpufreq/cpuinfo_max_freq"),
+    ]
+    caps, used = {}, None
+    for name, tmpl in sources:
+        vals = {c: read_int(tmpl.format(c)) for c in cpus}
+        vals = {c: v for c, v in vals.items() if v is not None}
+        if len(set(vals.values())) >= 2:
+            caps, used = vals, name
+            break
+
+    if not caps:
+        return cpus, [], "tek tip çekirdek (hibrit değil) — politika devre dışı"
+
+    hi = max(caps.values())
+    lo = min(caps.values())
+    # Ortadan böl: üst yarı P, alt yarı E. Intel'de favored core'lar P
+    # tarafında biraz daha yüksek çıkar, bu bölme onları da P'de tutar.
+    mid = (hi + lo) / 2
+    p_cores = [c for c in cpus if caps.get(c, 0) >= mid]
+    e_cores = [c for c in cpus if caps.get(c, 0) < mid]
+    if not e_cores:
+        return cpus, [], f"{used} ayrım yapmadı — politika devre dışı"
+
+    # Aynı fiziksel çekirdeğin SMT kardeşlerinden yalnızca ilkini al:
+    # decode'da çekirdek başına tek hesap thread'i istiyoruz.
+    seen = set()
+    p_nosmt = []
+    for c in p_cores:
+        try:
+            with open(f"/sys/devices/system/cpu/cpu{c}/topology/core_id") as f:
+                core = int(f.read().strip())
+        except OSError:
+            core = c
+        if core not in seen:
+            seen.add(core)
+            p_nosmt.append(c)
+    return p_nosmt, e_cores, None
+
+
+# ------------------------------------------------------------------ proc
+
+SHELLS = {"sh", "bash", "zsh", "dash", "fish", "ksh", "tcsh", "csh"}
+
+
+def find_pid(pattern):
+    """Desene uyan süreçleri bulur — kabukları ve kendimizi eleyerek.
+
+    Naif "cmdline içinde ara" yaklaşımı, aracı başlatan kabuğun KENDİSİNİ
+    eşleştirir: kabuğun komut satırında da o metin geçer. Sonuç, boşta bir
+    kabuğu izlemek ve hiç faz görmemek olur (bu tuzağa bir kez düşüldü).
+
+    Bu yüzden önce çalıştırılabilir adına (comm / argv[0] tabanı) bakılır;
+    yalnızca hiç eşleşme yoksa tam komut satırına düşülür, o da kabuklar
+    elenerek.
+    """
+    me, parent = os.getpid(), os.getppid()
+    by_exe, by_cmd = [], []
+    for d in glob.glob("/proc/[0-9]*"):
+        try:
+            pid = int(os.path.basename(d))
+        except ValueError:
+            continue
+        if pid in (me, parent):
+            continue
+        try:
+            with open(f"{d}/comm") as f:
+                comm = f.read().strip()
+            with open(f"{d}/cmdline", "rb") as f:
+                raw = f.read().split(b"\0")
+            cmd = b" ".join(raw).decode("utf-8", "replace").strip()
+        except OSError:
+            continue
+        if not cmd or "llm-phase-pin" in cmd:
+            continue
+        argv0 = os.path.basename(
+            raw[0].decode("utf-8", "replace")) if raw and raw[0] else ""
+        if pattern in comm or pattern in argv0:
+            by_exe.append((pid, cmd))
+        elif pattern in cmd and comm not in SHELLS:
+            by_cmd.append((pid, cmd))
+    return by_exe or by_cmd
+
+
+def tids(pid):
+    out = []
+    for p in glob.glob(f"/proc/{pid}/task/[0-9]*"):
+        try:
+            out.append(int(os.path.basename(p)))
+        except ValueError:
+            pass
+    return out
+
+
+def ctx_total(pid):
+    total = 0
+    for path in glob.glob(f"/proc/{pid}/task/[0-9]*/sched"):
+        try:
+            with open(path) as f:
+                for line in f:
+                    if line.startswith("nr_switches"):
+                        total += int(line.split(":")[1])
+                        break
+        except (OSError, ValueError):
+            continue
+    return total
+
+
+def cpu_jiffies(pid):
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            data = f.read()
+        rest = data[data.rfind(")") + 2:].split()
+        return int(rest[11]) + int(rest[12])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def set_affinity(pid, cpus):
+    ok = fail = 0
+    mask = set(cpus)
+    for tid in tids(pid):
+        try:
+            os.sched_setaffinity(tid, mask)
+            ok += 1
+        except OSError:
+            fail += 1
+    return ok, fail
+
+
+def get_affinity(pid):
+    try:
+        return sorted(os.sched_getaffinity(pid))
+    except OSError:
+        return None
+
+
+# ------------------------------------------------------------------ main
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="llm-phase-pin",
+        description="llama.cpp için faz-farkındalıklı CPU affinity daemon'u",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Örnek:\n"
+               "  llm-phase-pin --match llama-server\n"
+               "  llm-phase-pin --pid 12345 --dry-run\n")
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--pid", type=int, help="izlenecek sunucu PID'i")
+    g.add_argument("--match", help="cmdline'da aranacak metin (ör. llama-server)")
+    ap.add_argument("--hi", type=float, default=DEF_HI,
+                    help=f"decode eşiği, ctx/CPU-s (varsayılan {DEF_HI:.0f})")
+    ap.add_argument("--lo", type=float, default=DEF_LO,
+                    help=f"prefill eşiği, ctx/CPU-s (varsayılan {DEF_LO:.0f})")
+    ap.add_argument("--k", type=int, default=DEF_K,
+                    help=f"kaç ardışık örnek (varsayılan {DEF_K})")
+    ap.add_argument("--interval-ms", type=float, default=DEF_INTERVAL_MS,
+                    help=f"örnekleme periyodu (varsayılan {DEF_INTERVAL_MS:.0f})")
+    ap.add_argument("--min-prefill-ms", type=float, default=DEF_MIN_PREFILL_MS,
+                    help="prefill bu süreyi geçmeden E-core açma "
+                         f"(varsayılan {DEF_MIN_PREFILL_MS:.0f}); kısa "
+                         "cache'li turlarda politikayı devre dışı bırakır")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="affinity değiştirme, yalnızca kararları logla")
+    ap.add_argument("--quiet", action="store_true")
+    args = ap.parse_args()
+
+    p_cores, e_cores, warn = detect_topology()
+    if warn:
+        log(f"topoloji: {warn}")
+        if not e_cores:
+            log("E-core bulunamadı — bu araç hibrit CPU'lar içindir. Çıkılıyor.")
+            return 2
+    wide = sorted(p_cores + e_cores)
+    narrow = sorted(p_cores)
+    log(f"topoloji: P={narrow}  E={e_cores}")
+
+    if args.pid:
+        pid = args.pid
+        if not os.path.isdir(f"/proc/{pid}"):
+            log(f"PID {pid} bulunamadı")
+            return 1
+    else:
+        hits = find_pid(args.match)
+        if not hits:
+            log(f"'{args.match}' ile eşleşen süreç yok")
+            return 1
+        if len(hits) > 1:
+            log(f"'{args.match}' ile {len(hits)} süreç eşleşti; --pid ile seçin:")
+            for h, cmd in hits:
+                log(f"  {h}  {cmd[:80]}")
+            return 1
+        pid, cmd = hits[0]
+        log(f"süreç bulundu: pid={pid}  {cmd[:70]}")
+
+    original = get_affinity(pid)
+    log(f"orijinal maske: {original}")
+    if args.dry_run:
+        log("DRY-RUN: affinity değiştirilmeyecek")
+
+    restored = {"done": False}
+
+    def restore(*_):
+        if restored["done"]:
+            return
+        restored["done"] = True
+        if original and not args.dry_run:
+            ok, fail = set_affinity(pid, original)
+            log(f"orijinal maske geri yüklendi ({ok} thread, {fail} hata)")
+        log("çıkılıyor")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, restore)
+    signal.signal(signal.SIGTERM, restore)
+
+    state = "prefill"
+    run_len = 0
+    prev = None
+    prefill_since = None
+    applied_wide = False
+    n_switch = 0
+    interval = args.interval_ms / 1000.0
+
+    log(f"izleniyor (hi={args.hi:.0f} lo={args.lo:.0f} k={args.k} "
+        f"periyot={args.interval_ms:.0f}ms min-prefill={args.min_prefill_ms:.0f}ms)")
+
+    try:
+        while os.path.isdir(f"/proc/{pid}"):
+            now = time.monotonic()
+            sw, cj = ctx_total(pid), cpu_jiffies(pid)
+            if cj is None:
+                break
+            if prev is not None:
+                cpu_s = (cj - prev[1]) / HZ
+                norm = ((sw - prev[0]) / cpu_s) if cpu_s > 0 else 0.0
+                target = None
+                if state == "prefill" and norm > args.hi:
+                    run_len += 1
+                    if run_len >= args.k:
+                        target = "decode"
+                elif state == "decode" and norm < args.lo:
+                    run_len += 1
+                    if run_len >= args.k:
+                        target = "prefill"
+                else:
+                    run_len = 0
+
+                if target == "decode":
+                    state, run_len = "decode", 0
+                    prefill_since = None
+                    if applied_wide or args.dry_run:
+                        n_switch += 1
+                        if not args.dry_run:
+                            set_affinity(pid, narrow)
+                        applied_wide = False
+                        log(f"-> DECODE  (sinyal {norm:.0f}/CPU-s) maske=P{len(narrow)}",
+                            quiet=args.quiet)
+                elif target == "prefill":
+                    state, run_len = "prefill", 0
+                    prefill_since = now
+                    log(f"-> PREFILL (sinyal {norm:.0f}/CPU-s) "
+                        f"E-core {args.min_prefill_ms:.0f}ms sonra",
+                        quiet=args.quiet)
+
+                # İleri geçiş gecikme koruması: prefill sinyali görülür
+                # görülmez E-core açmıyoruz. Kazanç zaten yalnızca uzun
+                # prefill'de var; kısa cache'li turlarda politikayı hiç
+                # devreye sokmamak anomali riskini sıfırlıyor.
+                if (state == "prefill" and not applied_wide
+                        and prefill_since is not None
+                        and (now - prefill_since) * 1000 >= args.min_prefill_ms):
+                    n_switch += 1
+                    if not args.dry_run:
+                        set_affinity(pid, wide)
+                    applied_wide = True
+                    log(f"   E-core açıldı (prefill "
+                        f"{(now - prefill_since) * 1000:.0f}ms sürdü) "
+                        f"maske=P{len(narrow)}+E{len(e_cores)}",
+                        quiet=args.quiet)
+            prev = (sw, cj)
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        log(f"süreç bitti; {n_switch} maske değişimi yapıldı")
+        restore()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

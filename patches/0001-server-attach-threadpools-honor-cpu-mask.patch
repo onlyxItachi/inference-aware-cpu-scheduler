@@ -1,0 +1,72 @@
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index 715477e..120b0eb 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -11,6 +11,7 @@
+ #include "common.h"
+ #include "fit.h"
+ #include "llama.h"
++#include "ggml-cpu.h"
+ #include "log.h"
+ #include "sampling.h"
+ #include "speculative.h"
+@@ -1152,6 +1153,59 @@ private:
+             return false;
+         }
+ 
++        // Attach ggml threadpools so that -C/--cpu-mask and
++        // -Cb/--cpu-mask-batch actually take effect in the server.
++        //
++        // These flags are parsed by common/arg.cpp for every tool, but only
++        // llama-cli and llama-bench ever call llama_attach_threadpool(), so
++        // in the server they were silently ignored: a user passing -Cb got
++        // no error and no effect.
++        //
++        // This matters because llama.cpp already routes prefill and decode
++        // to separate pools (llama_context::graph_compute picks
++        // threadpool_batch vs threadpool). Without an attached pool the two
++        // phases can only differ in thread count, not in placement -- and
++        // thread count alone is not enough on hybrid CPUs, where decode
++        // threads drift onto E-cores and inflate tail latency.
++        {
++            auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
++            if (cpu_dev != nullptr) {
++                auto * reg = ggml_backend_dev_backend_reg(cpu_dev);
++                auto * ggml_threadpool_new_fn =
++                    (decltype(ggml_threadpool_new) *) ggml_backend_reg_get_proc_address(
++                        reg, "ggml_threadpool_new");
++
++                if (ggml_threadpool_new_fn != nullptr) {
++                    struct ggml_threadpool_params tpp_batch =
++                        ggml_threadpool_params_from_cpu_params(params_base.cpuparams_batch);
++                    struct ggml_threadpool_params tpp =
++                        ggml_threadpool_params_from_cpu_params(params_base.cpuparams);
++
++                    struct ggml_threadpool * threadpool_batch = nullptr;
++                    if (!ggml_threadpool_params_match(&tpp, &tpp_batch)) {
++                        threadpool_batch = ggml_threadpool_new_fn(&tpp_batch);
++                        if (threadpool_batch == nullptr) {
++                            SRV_ERR("batch threadpool create failed : n_threads %d\n",
++                                    tpp_batch.n_threads);
++                            return false;
++                        }
++                        // start the non-batch threadpool paused
++                        tpp.paused = true;
++                    }
++
++                    struct ggml_threadpool * threadpool = ggml_threadpool_new_fn(&tpp);
++                    if (threadpool == nullptr) {
++                        SRV_ERR("threadpool create failed : n_threads %d\n", tpp.n_threads);
++                        return false;
++                    }
++
++                    llama_attach_threadpool(ctx_tgt, threadpool, threadpool_batch);
++                    SRV_INF("threadpools attached: n_threads = %d, n_threads_batch = %d\n",
++                            tpp.n_threads, tpp_batch.n_threads);
++                }
++            }
++        }
++
+         vocab = llama_model_get_vocab(model_tgt);
+ 
+         n_ctx = llama_n_ctx(ctx_tgt);

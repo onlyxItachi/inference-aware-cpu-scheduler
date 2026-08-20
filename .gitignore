@@ -1,0 +1,22 @@
+# Local model files and links
+/models
+
+# llama.cpp is tracked as a submodule; keep local build trees out of this repo.
+/llama.cpp/build/
+/llama.cpp/build-*/
+
+# Python and local tooling caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Locally compiled benchmark helpers
+/harness/loadgen
+/harness/membw
+
+# Raw benchmark artifacts are large and reproducible from the harness.
+/results/**/*.json
+/results/**/*.log
+/results/**/*.passes
+/results/**/*.load
+/results/**/*.serverlog
