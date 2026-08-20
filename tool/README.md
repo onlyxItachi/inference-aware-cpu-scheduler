@@ -163,3 +163,29 @@ systemd-run --user --scope -p CPUWeight=1 <arka-plan-isi>   # boşluğun %49'u, 
 
 Araştırma çıktısı, üretim yazılımı değil. Ölçüm verisi ve metodoloji
 projenin `results/` ve `RAPOR_FINAL.md` dosyalarında.
+
+---
+
+## ⚠ Bu dosya eskidir (2026-07-20)
+
+**Yukarıdaki metin, kapanış oturumundaki hakem-gözü taramadan (§11) ÖNCE
+yazıldı ve bazı sayıları o taramada geçersiz çıktı.** Projenin dondurma
+kuralı gereği düzeltilmedi, silinmedi — tarihsel kayıt olarak duruyor.
+
+**Güncel ve otoriter kaynak: [`../RAPOR_FINAL.md`](../RAPOR_FINAL.md)**,
+özellikle §6 (çürütülen hipotezler) ve §11 (hakem itirazlarına karşı
+ölçümler). Çelişki görürsen o dosya geçerlidir. Özet için
+[`../README.md`](../README.md).
+
+Bilinen geçersiz iddialar:
+
+| yukarıda yazan | güncel durum |
+|---|---|
+| "arka planda koşan `make -j16` de %3.7 daha hızlı bitiyor" ve **"Takas değil"** | **GEÇERSİZ** (§11.2, §6 madde 18). Metrik rakibi hiç ölçmüyordu: `build.wait()` yanlış yerde çağrıldığı için `build_wall_s` LLM isteğinin süresini kaydediyordu. Gerçek rakiple ölçüldüğünde rakip **yavaşlıyor** — −%2.2 … −%2.4, iki bağımsız deneyde, p<0.01. Bu bir **takastır**: LLM TTFT'sinde %12 kazanç, rakip throughput'unda %2.4 kayıp. |
+| `CPUWeight=1` — "ara nokta, boşluğun %49'u, maliyet %13.5" | **GERİ ÇEKİLDİ** (§11.8). O sayılar sentetik rakiple (`loadgen`) ölçülmüştü. Gerçek bir `make -j16` karşısında hiçbir şey yapmıyor: ITL p95 +%1.0, TTFT −%0.4, rakibe maliyeti −%0.5 — hepsi gürültü içinde. Ara nokta önerisi kalktı. |
+| `chrt --idle` — "boşluğun %96.8'i, bedeli rakibin ~%55'i" | **TAVSİYE GEÇERLİ, sayılar sentetik.** Gerçek `make -j16` ile: LLM ITL p95 **−%23.5**, TTFT −%10.5, rakibe maliyeti **−%15.2** — yani öneri genelleniyor ve bedeli sentetik rakiptekinden çok daha ucuz (§11.8). |
+| TTFT/ITL tablosu (11 743 → 10 480 ms, %−10.8) | Sayılar doğru ama **o senaryonun rakibi sanıldığı kadar çekişmeli değildi** — build ölçüm penceresinin yalnızca %13'ünde vardı (§11.2). Pencere boyunca koşan gerçek rakiple yeniden ölçüldü; kazanç korundu: TTFT −%11.8 … −%12.5. |
+
+Ayrıca **"%2 gürültü tabanı"** varsayımı da düştü (§6 madde 21, §11.4): taban
+hem metriğe hem senaryoya bağlı — ITL p95 için %0.7 (rakipsiz) ile %5.20
+(aralıklı rakip) arasında değişiyor.
