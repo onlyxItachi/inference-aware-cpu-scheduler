@@ -1,5 +1,38 @@
 # Proje: LLM-Aware Scheduling (sched_ext)
 
+# REVISION 3 — Conference Upgrade (2026-08-21)
+
+Bu bölüm, konferans yükseltme çalışmaları için aşağıdaki tarihsel
+araştırma çerçevesinden önceliklidir. Tarihsel metin ve sonuçlar denetlenebilir
+kayıt olarak korunur; yeni işlerin kapsamını ve iddialarını
+`CONFERENCE_UPGRADE_TASKS.md` belirler.
+
+- Prefill/decode ayrımı projenin yeniliği değil, arka plan bilgisidir.
+- Heterojen P/E-core'lar arasındaki performans farkı ve bunun doğurduğu yük
+  dengesizliği projenin yeniliği değil, arka plan bilgisidir.
+- Aday merkezi katkı, **değiştirilmemiş bir inference runtime'ından istek
+  düzeyindeki faz bilgisini OS tarafından görülebilen sinyallerle dışarıdan geri
+  kazanmak ve bu bilgiyi inference engine iş birliği olmadan, eyleme
+  dönüştürülebilir OS düzeyi CPU yerleştirmesinde kullanmaktır**. Bunun merkezi
+  katkı olarak savunulabilirliği C01/C02 sonuçlarına bağlıdır; henüz kanıtlanmış
+  bir yenilik olarak sunulmaz.
+- Varsayılan Linux scheduler'ının ve Intel Thread Director/HFI donanım
+  rehberliğinin fazlara göre nasıl davrandığı bilinmiyor kabul edilir. Bu davranış
+  C01'de ölçülür; çözdüğü veya çözmediği varsayılmaz.
+- AVX yürütme asimetrisi, vektör genişliği ve diğer mikro-mimari
+  açıklamalar, nedensel kanıtla desteklenene kadar yalnızca hipotezdir; ölçülmüş
+  sonuç veya nedensel gerçek gibi yazılmaz.
+- **C01 ve C02 sert araştırma kapılarıdır.** Her kapının çıktıları analiz
+  edilip checkpoint onayı verilmeden sonraki araştırma dalına geçilmez.
+- C01 ve C02 analiz edilmeden C03 genellik çalışmasına veya C04 mekanizma
+  genişletmesine başlanmaz; bu başlıklarda kapsam kendiliğinden büyütülmez.
+- Konferans seçimi yalnızca bilimsel uyuma dayanmaz. Yazarın fiziksel katılım
+  zorunluluğunu karşılayabilmesi veya uzaktan sunumun resmen mümkün olması da
+  zorunlu bir uygunluk kapısıdır.
+- Konferans yükseltme dönemindeki ileriye dönük işlerin tek yetkili planı
+  `CONFERENCE_UPGRADE_TASKS.md` dosyasıdır. Tarihsel dosyalar geriye dönük
+  kanıttır; yeni görev sırası veya yeni iddia yetkisi vermez.
+
 ## Amaç
 
 Bu proje **bir scheduler yazma projesi değil**, bir **iş yükü karakterizasyonu**
