@@ -47,8 +47,20 @@ def read_topology():
     return cpu_core, {k: sorted(v) for k, v in core_cpus.items()}
 
 
-def sample_cpus(pid):
-    """tid -> current CPU, from /proc/<tid>/stat field 39."""
+def sample_tasks(pid):
+    """Return scheduler-visible state for every readable thread of *pid*.
+
+    The values come from a single read of ``/proc/<tid>/stat``:
+
+    - ``state``: task state (field 3),
+    - ``cpu_ticks``: user + system CPU time (fields 14 and 15),
+    - ``cpu``: last/current processor (field 39).
+
+    ``cpu_ticks`` lets an offline consumer distinguish a thread that actually
+    ran between two samples from an idle helper whose field 39 merely retains
+    the last CPU on which it ran.  Keeping all three raw values also avoids
+    baking a particular "active" definition into this low-level primitive.
+    """
     out = {}
     for path in glob.glob(f"/proc/{pid}/task/*/stat"):
         try:
@@ -62,8 +74,24 @@ def sample_cpus(pid):
         if len(rest) < 37:
             continue
         tid = int(path.split("/task/")[1].split("/")[0])
-        out[tid] = int(rest[36])
+        try:
+            out[tid] = {
+                "state": rest[0],
+                "cpu_ticks": int(rest[11]) + int(rest[12]),
+                "cpu": int(rest[36]),
+            }
+        except (ValueError, IndexError):
+            continue
     return out
+
+
+def sample_cpus(pid):
+    """tid -> current CPU, from /proc/<tid>/stat field 39.
+
+    This compatibility wrapper preserves the original public API used by the
+    historical residency experiments.
+    """
+    return {tid: task["cpu"] for tid, task in sample_tasks(pid).items()}
 
 
 def main():
