@@ -153,6 +153,102 @@ def build_schedule(rounds, order_seed):
     return schedule
 
 
+def schedule_from_round(plan, start_round):
+    """Select an absolute round suffix without renumbering the experiment."""
+    return [
+        item for item in plan["schedule"]
+        if item["round"] >= start_round
+    ]
+
+
+def _stable_environment_protocol(environment):
+    protocol = environment.get("protocol", {})
+    stable_keys = (
+        "order_seed", "interval_ms", "detector_hi", "detector_lo",
+        "detector_k", "cooldown_s", "initial_cooldown_s", "ctx", "batch",
+        "ubatch", "n_predict", "seed",
+    )
+    return {
+        "protocol": {key: protocol.get(key) for key in stable_keys},
+        "arm_configs": environment.get("arm_configs"),
+        "kernel_release": environment.get("kernel", {}).get("release"),
+        "power": {
+            key: environment.get("power", {}).get(key)
+            for key in (
+                "drivers", "governors", "energy_performance_preferences",
+                "intel_pstate_no_turbo", "intel_pstate_status",
+            )
+        },
+        "diagnostic_server": {
+            key: environment.get("llama_cpp", {})
+            .get("diagnostic_server_binary", {}).get(key)
+            for key in ("resolved_path", "sha256")
+        },
+        "model": {
+            key: environment.get("model", {}).get(key)
+            for key in ("resolved_path", "sha256", "size_bytes", "mtime_ns")
+        },
+        "prompt": {
+            key: environment.get("prompt", {}).get(key)
+            for key in ("resolved_path", "sha256")
+        },
+    }
+
+
+def validate_completed_prefix(outdir, schedule, start_round,
+                              candidate_environment=None):
+    """Prove earlier rounds are complete and protocol-compatible."""
+    if start_round <= 1:
+        return []
+    outdir = Path(outdir)
+    expected = [item for item in schedule if item["round"] < start_round]
+    validated = []
+    environment_cache = {}
+    candidate_signature = (
+        _stable_environment_protocol(candidate_environment)
+        if candidate_environment is not None else None
+    )
+    for item in expected:
+        stem = run_stem(item)
+        path = outdir / "raw" / "runs" / f"{stem}.json"
+        if not path.exists():
+            raise RuntimeError(
+                f"continuation requires completed prefix run: {path}"
+            )
+        record = json.loads(path.read_text(encoding="utf-8"))
+        identity = {
+            "status": record.get("status"),
+            "round": record.get("round"),
+            "sequence_index": record.get("sequence_index"),
+            "global_sequence_index": record.get("global_sequence_index"),
+            "arm": record.get("arm"),
+            "randomized_order_seed": record.get("randomized_order_seed"),
+        }
+        expected_identity = {"status": "ok", **item}
+        if identity != expected_identity:
+            raise RuntimeError(
+                f"continuation prefix identity mismatch in {path}"
+            )
+        if candidate_signature is not None:
+            env_rel = record.get("environment_file")
+            if not env_rel:
+                raise RuntimeError(f"continuation run lacks environment: {path}")
+            if env_rel not in environment_cache:
+                env_path = outdir / env_rel
+                environment_cache[env_rel] = json.loads(
+                    env_path.read_text(encoding="utf-8")
+                )
+            prior_signature = _stable_environment_protocol(
+                environment_cache[env_rel]
+            )
+            if prior_signature != candidate_signature:
+                raise RuntimeError(
+                    f"continuation protocol differs from {env_rel}"
+                )
+        validated.append(stem)
+    return validated
+
+
 def server_command(args, spec):
     command = []
     if spec["initial_cpus"] is not None:
@@ -830,6 +926,10 @@ def environment_record(args, preflight, specs, p_cpus, e_cpus):
         "protocol": {
             "rounds": args.rounds,
             "runs": args.rounds * len(ARMS),
+            "start_round": args.start_round,
+            "selected_runs": (
+                args.rounds - args.start_round + 1
+            ) * len(ARMS),
             "order_seed": args.order_seed,
             "interval_ms": args.interval_ms,
             "detector_hi": args.hi,
@@ -924,6 +1024,13 @@ def parse_args(argv=None):
     parser.add_argument("--prompt", default=str(HARNESS / "prompt_512.txt"))
     parser.add_argument("--outdir", default=str(ROOT / "results" / "conference_c02"))
     parser.add_argument("--rounds", type=int, default=SMOKE_ROUNDS)
+    parser.add_argument(
+        "--start-round", type=int, default=1,
+        help=(
+            "first absolute round to execute; --rounds remains the total "
+            "experiment round count"
+        ),
+    )
     parser.add_argument("--order-seed", type=int, default=DEFAULT_ORDER_SEED)
     parser.add_argument("--interval-ms", type=float, default=DEFAULT_INTERVAL_MS)
     parser.add_argument("--hi", type=float, default=DEFAULT_HI)
@@ -954,6 +1061,10 @@ def parse_args(argv=None):
             "six-round C02 pilot requires explicit checkpoint approval and "
             "--full-pilot-approved"
         )
+    if args.start_round < 1 or args.start_round > args.rounds:
+        parser.error("--start-round must be between 1 and --rounds")
+    if args.start_round > 1 and not args.resume:
+        parser.error("continuation with --start-round requires --resume")
     if args.interval_ms != DEFAULT_INTERVAL_MS:
         parser.error(
             f"C02 freezes --interval-ms at {DEFAULT_INTERVAL_MS:g} ms"
@@ -980,10 +1091,18 @@ def main(argv=None):
     preflight = c01.stock_preflight()
     p_cpus, e_cpus = discover_cpu_sets()
     specs = arm_specs(p_cpus, e_cpus)
+    environment = environment_record(args, preflight, specs, p_cpus, e_cpus)
+    proposed_schedule = build_schedule(args.rounds, args.order_seed)
+    validate_completed_prefix(
+        args.outdir,
+        proposed_schedule,
+        args.start_round,
+        candidate_environment=environment,
+    )
     plan = ensure_plan(args.outdir, args.rounds, args.order_seed, specs)
     environment_file = register_environment(
         args.outdir,
-        environment_record(args, preflight, specs, p_cpus, e_cpus),
+        environment,
     )
     if args.initial_cooldown:
         print(f"[C02] initial cooldown {args.initial_cooldown}s", flush=True)
@@ -991,7 +1110,7 @@ def main(argv=None):
 
     failures = 0
     completed = 0
-    for item in plan["schedule"]:
+    for item in schedule_from_round(plan, args.start_round):
         stem = run_stem(item)
         run_path = Path(args.outdir) / "raw" / "runs" / f"{stem}.json"
         if run_path.exists():

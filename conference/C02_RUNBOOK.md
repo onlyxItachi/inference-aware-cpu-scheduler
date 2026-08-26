@@ -91,10 +91,50 @@ If an interrupted smoke is resumed, use the identical command with
 The persisted `raw/plan.json` prevents changing the seed, arm configuration,
 or round order during a resume.
 
-The six-round pilot is gated in the runner and requires explicit approval
-after smoke analysis. No six-round command is provided at this checkpoint.
+The six-round pilot remains gated and requires explicit approval after smoke
+analysis.
 
-## 2. Analyze the smoke
+## 2. Continue the same experiment with rounds 3–6
+
+Run this command only after explicit full-pilot approval. It extends the
+persisted plan to six total rounds while selecting only absolute rounds 3–6.
+`--rounds 6` means six total experiment rounds; it does not renumber the four
+new rounds as 1–4. `--start-round 3` prevents rounds 1–2 from entering the
+execution loop, and `--resume` preserves any already completed deterministic
+run IDs.
+
+```bash
+python3 conference/experiments/c02_external_oracle.py \
+  --server-bin llama.cpp/build-diag/bin/llama-server \
+  --model models/Qwen3.5-9B-Q4_K_M.gguf \
+  --prompt harness/prompt_512.txt \
+  --rounds 6 \
+  --start-round 3 \
+  --order-seed 2202 \
+  --interval-ms 20 \
+  --hi 3000 \
+  --lo 2100 \
+  --k 2 \
+  --ctx 2048 \
+  --batch 2048 \
+  --ubatch 512 \
+  --n-predict 256 \
+  --seed 42 \
+  --port 8130 \
+  --initial-cooldown 30 \
+  --cooldown 30 \
+  --outdir results/conference_c02 \
+  --resume \
+  --full-pilot-approved
+```
+
+Before extending the plan, the runner verifies that all ten round-1/2 run IDs
+exist and match the frozen randomized prefix. It also compares the prior and
+current diagnostic binary, model, prompt, kernel, power state, arm
+configuration, detector settings, thread counts, and cooldown protocol. A
+mismatch aborts continuation without executing a benchmark.
+
+## 3. Analyze all available C02 rounds
 
 ```bash
 python3 conference/analysis/c02_analyze.py \
@@ -102,8 +142,12 @@ python3 conference/analysis/c02_analyze.py \
 ```
 
 The analyzer reports observations and recovery ratios without declaring the
-research gate PASS or FAIL. Bring `summary.json`, `summary.md`, `c02_runs.csv`,
-the failure directory if present, and at least one ORACLE phase log to ChatGPT.
+research gate PASS or FAIL. It prominently reports readable thermal-throttle
+counter changes per arm and marks recovery metrics whose static anchor has a
+non-zero delta without altering their numeric values. Direct EXTERNAL–ORACLE
+gaps remain separate because they do not use a static anchor. Bring
+`summary.json`, `summary.md`, `c02_runs.csv`, the failure directory if present,
+and at least one ORACLE phase log to ChatGPT.
 
 ## Artifacts
 
@@ -145,3 +189,8 @@ Review, without automatic PASS/FAIL classification:
 5. What is EXTERNAL's detection/action timing error relative to that boundary?
 6. Are EXTERNAL and ORACLE close enough to authorize six rounds?
 7. Do temperature ranges or throttle-counter changes identify a confounded arm?
+
+Negative detector offsets are described only as the external criterion
+crossing relative to the first internally marked unbatched decode computation.
+They are not automatically labeled prediction or anticipation because those
+events can denote different semantic points in the transition.

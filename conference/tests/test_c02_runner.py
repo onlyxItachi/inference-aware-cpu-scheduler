@@ -1,6 +1,7 @@
 import importlib.util
 import contextlib
 import io
+import json
 import sys
 import tempfile
 import time
@@ -188,6 +189,73 @@ class C02RunnerTests(unittest.TestCase):
             full = C02.ensure_plan(tmp, 6, 2202, self.specs)
             self.assertEqual(smoke["schedule"], full["schedule"][:10])
             self.assertEqual(full["rounds"], 6)
+
+    def test_continuation_uses_absolute_round_numbers_three_through_six(self):
+        plan = {"schedule": C02.build_schedule(6, 2202)}
+        continuation = C02.schedule_from_round(plan, 3)
+        self.assertEqual(len(continuation), 20)
+        self.assertEqual(
+            sorted({item["round"] for item in continuation}), [3, 4, 5, 6]
+        )
+        self.assertEqual(
+            [item["global_sequence_index"] for item in continuation],
+            list(range(11, 31)),
+        )
+
+    def test_continuation_never_selects_or_overwrites_smoke_runs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            smoke = C02.build_schedule(2, 2202)
+            runs = root / "raw" / "runs"
+            runs.mkdir(parents=True)
+            before = {}
+            for item in smoke:
+                path = runs / f"{C02.run_stem(item)}.json"
+                payload = {"status": "ok", **item}
+                path.write_text(str(payload), encoding="utf-8")
+                before[path] = path.read_bytes()
+
+            full = {"schedule": C02.build_schedule(6, 2202)}
+            selected = C02.schedule_from_round(full, 3)
+            self.assertTrue(all(item["round"] >= 3 for item in selected))
+            self.assertTrue(all(path.read_bytes() == data
+                                for path, data in before.items()))
+
+    def test_completed_prefix_validation_requires_all_smoke_run_ids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            schedule = C02.build_schedule(6, 2202)
+            runs = root / "raw" / "runs"
+            runs.mkdir(parents=True)
+            for item in schedule[:10]:
+                path = runs / f"{C02.run_stem(item)}.json"
+                path.write_text(
+                    json.dumps({"status": "ok", **item}),
+                    encoding="utf-8",
+                )
+            validated = C02.validate_completed_prefix(root, schedule, 3)
+            self.assertEqual(len(validated), 10)
+            (runs / f"{C02.run_stem(schedule[0])}.json").unlink()
+            with self.assertRaises(RuntimeError):
+                C02.validate_completed_prefix(root, schedule, 3)
+
+    def test_round_three_through_six_orders_are_deterministic(self):
+        schedule = C02.build_schedule(6, 2202)
+        expected = {
+            3: ["EXTERNAL", "STATIC_P", "STATIC_PE", "STOCK", "ORACLE"],
+            4: ["STATIC_P", "STOCK", "STATIC_PE", "ORACLE", "EXTERNAL"],
+            5: ["STATIC_P", "STOCK", "EXTERNAL", "ORACLE", "STATIC_PE"],
+            6: ["EXTERNAL", "STATIC_PE", "ORACLE", "STATIC_P", "STOCK"],
+        }
+        for round_number, order in expected.items():
+            members = [
+                item for item in schedule if item["round"] == round_number
+            ]
+            self.assertEqual([item["arm"] for item in members], order)
+            self.assertEqual(
+                {item["randomized_order_seed"] for item in members},
+                {2202 + round_number},
+            )
 
 
 if __name__ == "__main__":

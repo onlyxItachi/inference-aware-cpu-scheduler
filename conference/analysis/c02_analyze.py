@@ -37,6 +37,7 @@ METRICS = (
     "j_per_token", "affinity_cost_us",
 )
 RECOVERY_RELATIVE_EPSILON = 1e-3
+THERMAL_ANCHOR_WARNING = "THERMAL_ANCHOR_WARNING"
 
 
 def read_json(path):
@@ -93,6 +94,47 @@ def timing_for_run(record):
             if record.get("arm") == "ORACLE" else None
         ),
         "affinity_cost_us": numeric(record.get("affinity_cost_us")),
+    }
+
+
+def run_identifier(record):
+    """Return the deterministic run stem used by the C02 runner."""
+    try:
+        return (
+            f"round_{int(record['round']):02d}_"
+            f"seq_{int(record['sequence_index']):02d}_"
+            f"{str(record['arm']).lower()}"
+        )
+    except (KeyError, TypeError, ValueError):
+        return str(record.get("run_id") or "unknown_run")
+
+
+def throttle_delta(record):
+    """Return a readable aggregate throttle delta, or None when unavailable."""
+    thermal = record.get("thermal_throttle_delta")
+    if not isinstance(thermal, dict):
+        return None
+    return numeric(thermal.get("total"))
+
+
+def thermal_throttle_summary(records):
+    readable = []
+    affected = []
+    for record in records:
+        delta = throttle_delta(record)
+        if delta is None:
+            continue
+        readable.append(delta)
+        if delta > 0:
+            affected.append(run_identifier(record))
+    return {
+        "readable_run_count": len(readable),
+        "unreadable_run_count": len(records) - len(readable),
+        "runs_with_throttle_delta_gt_zero": len(affected),
+        "total_throttle_delta": rounded(sum(readable)) if readable else None,
+        "min_throttle_delta": rounded(min(readable)) if readable else None,
+        "max_throttle_delta": rounded(max(readable)) if readable else None,
+        "affected_run_ids": affected,
     }
 
 
@@ -174,6 +216,7 @@ def arm_summary(records):
             "end_min_c": min(ends) if ends else None,
             "end_max_c": max(ends) if ends else None,
         },
+        "thermal_throttle": thermal_throttle_summary(records),
         "phase_action_timing": timing_summary,
         "switch_attempts": sum(bool(record.get("switch_attempted"))
                                for record in records),
@@ -202,6 +245,7 @@ def external_oracle_gap(by_arm):
             output[metric] = None
             continue
         output[metric] = {
+            "static_anchor_dependent": False,
             "external_mean": external,
             "oracle_mean": oracle,
             "external_minus_oracle": rounded(external - oracle),
@@ -213,25 +257,39 @@ def external_oracle_gap(by_arm):
     return output
 
 
+def recovery_with_anchor(by_arm, anchor_arm, metric, higher_is_better):
+    result = recovery(
+        mean(by_arm, anchor_arm, metric),
+        mean(by_arm, "EXTERNAL", metric),
+        mean(by_arm, "ORACLE", metric),
+        higher_is_better=higher_is_better,
+    )
+    thermal = by_arm.get(anchor_arm, {}).get("thermal_throttle", {})
+    affected = thermal.get("runs_with_throttle_delta_gt_zero", 0) > 0
+    result["anchor_arm"] = anchor_arm
+    result["anchor_thermal_warning"] = affected
+    result["anchor_affected_run_ids"] = thermal.get("affected_run_ids", [])
+    if affected:
+        result["calculation_status"] = result["status"]
+        result["status"] = THERMAL_ANCHOR_WARNING
+        result["warning"] = (
+            f"{anchor_arm} thermal-throttle counters changed; preserve the "
+            "numeric recovery value but treat this anchor-dependent metric "
+            "as potentially thermally affected"
+        )
+    return result
+
+
 def recovery_metrics(by_arm):
     return {
-        "ttft_recovery": recovery(
-            mean(by_arm, "STATIC_P", "ttft_ms"),
-            mean(by_arm, "EXTERNAL", "ttft_ms"),
-            mean(by_arm, "ORACLE", "ttft_ms"),
-            higher_is_better=False,
+        "ttft_recovery": recovery_with_anchor(
+            by_arm, "STATIC_P", "ttft_ms", higher_is_better=False,
         ),
-        "itl_p95_recovery": recovery(
-            mean(by_arm, "STATIC_PE", "itl_p95_ms"),
-            mean(by_arm, "EXTERNAL", "itl_p95_ms"),
-            mean(by_arm, "ORACLE", "itl_p95_ms"),
-            higher_is_better=False,
+        "itl_p95_recovery": recovery_with_anchor(
+            by_arm, "STATIC_PE", "itl_p95_ms", higher_is_better=False,
         ),
-        "throughput_recovery": recovery(
-            mean(by_arm, "STATIC_PE", "decode_tps"),
-            mean(by_arm, "EXTERNAL", "decode_tps"),
-            mean(by_arm, "ORACLE", "decode_tps"),
-            higher_is_better=True,
+        "throughput_recovery": recovery_with_anchor(
+            by_arm, "STATIC_PE", "decode_tps", higher_is_better=True,
         ),
     }
 
@@ -303,6 +361,31 @@ def validate_rounds(records, warnings):
     return orders
 
 
+def thermal_warning(arm, thermal):
+    affected = thermal.get("affected_run_ids", [])
+    base = (
+        f"Thermal throttling counters changed in {arm} runs: {affected}. "
+    )
+    if arm == "STATIC_P":
+        scope = (
+            "Comparisons using STATIC_P, including TTFT recovery, must be "
+            "treated as potentially thermally affected until the full pilot "
+            "is reviewed. "
+        )
+    elif arm == "STATIC_PE":
+        scope = (
+            "Comparisons using STATIC_PE, including ITL p95 and throughput "
+            "recovery, must be treated as potentially thermally affected "
+            "until the full pilot is reviewed. "
+        )
+    else:
+        scope = (
+            f"Comparisons involving {arm} must be treated as potentially "
+            "thermally affected until the full pilot is reviewed. "
+        )
+    return base + scope + "The counter change is observational, not causal."
+
+
 def markdown(summary):
     lines = [
         "# TASK-C02 observation summary",
@@ -317,6 +400,20 @@ def markdown(summary):
         "oracle ground truth; only ORACLE routes it to the actuator, and "
         "EXTERNAL does not consume application phase information for "
         "decisions.",
+    ]
+    if summary["thermal_throttle_observations"]["any_nonzero"]:
+        lines += [
+            "",
+            "## THERMAL-THROTTLE WARNING",
+            "",
+        ]
+        lines.extend(
+            f"> {warning}"
+            for warning in summary["thermal_throttle_observations"][
+                "warnings"
+            ]
+        )
+    lines += [
         "",
         "## Per-arm performance",
         "",
@@ -356,10 +453,35 @@ def markdown(summary):
 
     lines += [
         "",
+        "## Thermal-throttle counters",
+        "",
+        "Counter deltas are observational indicators. Their presence does "
+        "not by itself establish that throttling caused a performance gap.",
+        "",
+        "| arm | readable runs | runs with delta > 0 | total delta | "
+        "min / max delta | affected run IDs |",
+        "|---|---:|---:|---:|---:|---|",
+    ]
+    for arm in ARMS:
+        thermal = summary["arms"].get(arm, {}).get("thermal_throttle", {})
+        affected = ", ".join(thermal.get("affected_run_ids", [])) or "none"
+        lines.append(
+            f"| {arm} | {thermal.get('readable_run_count')} | "
+            f"{thermal.get('runs_with_throttle_delta_gt_zero')} | "
+            f"{thermal.get('total_throttle_delta')} | "
+            f"{thermal.get('min_throttle_delta')} / "
+            f"{thermal.get('max_throttle_delta')} | {affected} |"
+        )
+
+    lines += [
+        "",
         "## Phase and action timing",
         "",
-        "All offsets use the internal PHASE_MARK boundary as zero; first-token "
-        "arrival is not used as phase ground truth.",
+        "All offsets are reported relative to the first internally marked "
+        "unbatched decode computation; first-token arrival is not used as "
+        "phase ground truth. A negative external offset is only a criterion "
+        "crossing relative to that marked computation, not an automatic "
+        "claim of early prediction or anticipation.",
         "",
         "| arm | marker delivery mean ms | external detect vs internal mean "
         "ms | action vs internal mean ms | affinity cost mean us | switches "
@@ -388,6 +510,10 @@ def markdown(summary):
         "",
         "## EXTERNAL vs ORACLE",
         "",
+        "These direct gaps use only EXTERNAL and ORACLE observations. They do "
+        "not depend on STATIC_P or STATIC_PE and therefore do not inherit a "
+        "static-anchor thermal warning.",
+        "",
         "| metric | external mean | oracle mean | absolute gap | relative gap |",
         "|---|---:|---:|---:|---:|",
     ]
@@ -401,7 +527,13 @@ def markdown(summary):
 
     lines += ["", "## Oracle recovery", ""]
     for name, value in summary["oracle_recovery"].items():
-        if value.get("status") == "ok":
+        if value.get("status") == THERMAL_ANCHOR_WARNING:
+            lines.append(
+                f"- {name}: {value.get('value')} (not clamped) — "
+                f"{THERMAL_ANCHOR_WARNING}; anchor={value.get('anchor_arm')}; "
+                f"affected={value.get('anchor_affected_run_ids')}"
+            )
+        elif value.get("status") == "ok":
             lines.append(f"- {name}: {value['value']} (not clamped)")
         else:
             lines.append(f"- {name}: NA — {value['explanation']}")
@@ -530,6 +662,16 @@ def analyze(input_dir, output_dir=None):
             "not every run records the common live PHASE_MARK watcher"
         )
 
+    thermal_by_arm = {
+        arm: by_arm[arm]["thermal_throttle"] for arm in ARMS
+    }
+    thermal_warnings = [
+        thermal_warning(arm, thermal_by_arm[arm])
+        for arm in ARMS
+        if thermal_by_arm[arm]["runs_with_throttle_delta_gt_zero"] > 0
+    ]
+    warnings.extend(thermal_warnings)
+
     failure_paths = sorted(
         (input_root / "raw" / "runs" / "failures").glob("*.json")
     )
@@ -540,6 +682,10 @@ def analyze(input_dir, output_dir=None):
         "interpretation_policy": (
             "descriptive C02 comparison only; stock Linux wording is "
             "composite and Thread Director/HFI causal attribution is excluded"
+        ),
+        "timing_reference": (
+            "external criterion crossing relative to the first internally "
+            "marked unbatched decode computation"
         ),
         "protocol": {
             "successful_run_count": len(records),
@@ -560,7 +706,19 @@ def analyze(input_dir, output_dir=None):
             ],
         },
         "arms": by_arm,
+        "thermal_throttle_observations": {
+            "any_nonzero": bool(thermal_warnings),
+            "by_arm": thermal_by_arm,
+            "warnings": thermal_warnings,
+        },
         "external_vs_oracle": external_oracle_gap(by_arm),
+        "external_vs_oracle_scope": {
+            "static_anchor_dependent": False,
+            "statement": (
+                "Direct EXTERNAL-vs-ORACLE gaps do not depend on STATIC_P "
+                "or STATIC_PE recovery anchors."
+            ),
+        },
         "oracle_recovery": recovery_metrics(by_arm),
         "stock_comparisons": stock_comparisons(by_arm),
         "warnings": warnings,

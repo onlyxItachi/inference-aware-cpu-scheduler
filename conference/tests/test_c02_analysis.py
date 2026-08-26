@@ -15,6 +15,19 @@ SPEC.loader.exec_module(C02A)
 
 
 class C02AnalysisTests(unittest.TestCase):
+    @staticmethod
+    def _arm_summary(ttft, p95, tps, throttle_total=0):
+        records = [{
+            "round": 1,
+            "sequence_index": 1,
+            "arm": "SYNTHETIC",
+            "ttft_ms": ttft,
+            "itl_p95_ms": p95,
+            "decode_tps": tps,
+            "thermal_throttle_delta": {"total": throttle_total},
+        }]
+        return C02A.arm_summary(records)
+
     def test_lower_is_better_recovery(self):
         value = C02A.recovery(100.0, 82.0, 80.0, higher_is_better=False)
         self.assertEqual(value["status"], "ok")
@@ -58,6 +71,82 @@ class C02AnalysisTests(unittest.TestCase):
         }
         timing = C02A.timing_for_run(record)
         self.assertEqual(timing["marker_delivery_latency_ms"], 7.5)
+
+    def test_thermal_warning_generation_reports_affected_run_ids(self):
+        records = [
+            {
+                "round": 1, "sequence_index": 2, "arm": "STATIC_P",
+                "thermal_throttle_delta": {"total": 810},
+            },
+            {
+                "round": 2, "sequence_index": 3, "arm": "STATIC_P",
+                "thermal_throttle_delta": {"total": 1270},
+            },
+        ]
+        thermal = C02A.thermal_throttle_summary(records)
+        warning = C02A.thermal_warning("STATIC_P", thermal)
+        self.assertEqual(thermal["runs_with_throttle_delta_gt_zero"], 2)
+        self.assertEqual(thermal["total_throttle_delta"], 2080)
+        self.assertEqual(thermal["min_throttle_delta"], 810)
+        self.assertEqual(thermal["max_throttle_delta"], 1270)
+        self.assertEqual(
+            thermal["affected_run_ids"],
+            ["round_01_seq_02_static_p", "round_02_seq_03_static_p"],
+        )
+        self.assertIn("TTFT recovery", warning)
+        self.assertIn("observational, not causal", warning)
+
+    def test_recovery_warning_is_specific_to_throttled_anchor(self):
+        by_arm = {
+            "STATIC_P": self._arm_summary(100, 90, 10, throttle_total=5),
+            "STATIC_PE": self._arm_summary(95, 105, 9, throttle_total=0),
+            "EXTERNAL": self._arm_summary(82, 92, 14, throttle_total=0),
+            "ORACLE": self._arm_summary(80, 90, 15, throttle_total=0),
+        }
+        values = C02A.recovery_metrics(by_arm)
+        self.assertEqual(
+            values["ttft_recovery"]["status"],
+            C02A.THERMAL_ANCHOR_WARNING,
+        )
+        self.assertAlmostEqual(values["ttft_recovery"]["value"], 0.9)
+        self.assertEqual(values["itl_p95_recovery"]["status"], "ok")
+        self.assertEqual(values["throughput_recovery"]["status"], "ok")
+
+    def test_static_pe_warning_marks_only_static_pe_recoveries(self):
+        by_arm = {
+            "STATIC_P": self._arm_summary(100, 90, 10, throttle_total=0),
+            "STATIC_PE": self._arm_summary(95, 105, 9, throttle_total=7),
+            "EXTERNAL": self._arm_summary(82, 92, 14, throttle_total=0),
+            "ORACLE": self._arm_summary(80, 90, 15, throttle_total=0),
+        }
+        values = C02A.recovery_metrics(by_arm)
+        self.assertEqual(values["ttft_recovery"]["status"], "ok")
+        self.assertEqual(
+            values["itl_p95_recovery"]["status"],
+            C02A.THERMAL_ANCHOR_WARNING,
+        )
+        self.assertEqual(
+            values["throughput_recovery"]["status"],
+            C02A.THERMAL_ANCHOR_WARNING,
+        )
+
+    def test_direct_external_oracle_gap_is_anchor_independent(self):
+        by_arm = {
+            "STATIC_P": self._arm_summary(100, 90, 10, throttle_total=5),
+            "STATIC_PE": self._arm_summary(95, 105, 9, throttle_total=0),
+            "EXTERNAL": self._arm_summary(82, 92, 14, throttle_total=0),
+            "ORACLE": self._arm_summary(80, 90, 15, throttle_total=0),
+        }
+        before = C02A.external_oracle_gap(by_arm)
+        by_arm["STATIC_P"] = self._arm_summary(
+            1000, 900, 1, throttle_total=999
+        )
+        after = C02A.external_oracle_gap(by_arm)
+        self.assertEqual(before, after)
+        self.assertTrue(all(
+            value["static_anchor_dependent"] is False
+            for value in after.values()
+        ))
 
     def test_synthetic_smoke_analysis_reports_all_arms(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -110,6 +199,7 @@ class C02AnalysisTests(unittest.TestCase):
                         "total_ctx_switches": 1000,
                         "temp_start_c": 60,
                         "temp_end_c": 80,
+                        "thermal_throttle_delta": {"total": 0},
                         "switch_attempted": action,
                         "switch_success": action,
                         "external_detected": True,
