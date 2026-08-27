@@ -458,8 +458,14 @@ def verify_diagnostic_build(repo_root, server_bin):
             "frozen diagnostic patch is not applied to the pinned llama.cpp source; "
             "run ./conference/tools/c03_cross_vendor.sh build-diag"
         )
-    changed = git_output(["status", "--porcelain", "--untracked-files=no"], cwd=llama).splitlines()
-    if changed != [" M src/llama-context.cpp"]:
+    changed = [
+        line.strip()
+        for line in git_output(
+            ["status", "--porcelain", "--untracked-files=no"], cwd=llama
+        ).splitlines()
+        if line.strip()
+    ]
+    if changed != ["M src/llama-context.cpp"]:
         raise PreflightError(
             "llama.cpp source differs from the expected diagnostic patch state: "
             f"{changed}"
@@ -797,9 +803,12 @@ def perform_preflight(args):
         ),
         "submodule_status": git_output(["submodule", "status"]),
     }
-    if status == "PASS" and git_meta["tracked_dirty_porcelain"].splitlines() != [
-        " m llama.cpp"
-    ]:
+    tracked_lines = [
+        line.strip()
+        for line in git_meta["tracked_dirty_porcelain"].splitlines()
+        if line.strip()
+    ]
+    if status == "PASS" and tracked_lines not in (["m llama.cpp"], ["M llama.cpp"]):
         status = "FAIL"
         error = (
             "tracked repository state is not the clean AMD branch plus only "
