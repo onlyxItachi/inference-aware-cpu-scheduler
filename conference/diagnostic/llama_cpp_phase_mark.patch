@@ -1,0 +1,31 @@
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index eed041e..0f0a5c1 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -15,4 +15,5 @@
+ #include <cinttypes>
++#include <ctime>
+ #include <cmath>
+ #include <cstring>
+ #include <limits>
+@@ -2438,4 +2439,20 @@ ggml_status llama_context::graph_compute(
+             ggml_cgraph * gf,
+                    bool   batched) {
++    // Diagnostic-only phase boundary used by C01/C02/C03. Emit once on the
++    // first compute and thereafter only when batched state changes.
++    static bool first_call   = true;
++    static bool prev_batched = true;
++    if (first_call || batched != prev_batched) {
++        struct timespec ts;
++        clock_gettime(CLOCK_MONOTONIC, &ts);
++        const long long t_mono_ns =
++            (long long) ts.tv_sec * 1000000000LL + ts.tv_nsec;
++        fprintf(stderr, "PHASE_MARK batched=%d t_mono_ns=%lld\n",
++                batched ? 1 : 0, t_mono_ns);
++        fflush(stderr);
++        prev_batched = batched;
++        first_call = false;
++    }
++
+     int n_threads        = batched ? cparams.n_threads_batch : cparams.n_threads;
+     ggml_threadpool_t tp = batched ? threadpool_batch        : threadpool;

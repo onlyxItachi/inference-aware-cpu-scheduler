@@ -254,18 +254,29 @@ def validate_hardware_for_path(path, cpu_identity):
 
 
 def verify_phase_mark_binary(path):
-    """Read-only guard: reject a server binary lacking the marker literal."""
+    """Reject a runtime whose executable/shared libraries lack the marker."""
     needle = b"PHASE_MARK"
-    overlap = b""
-    with Path(path).open("rb") as source:
-        while True:
-            chunk = source.read(1024 * 1024)
-            if not chunk:
-                break
-            data = overlap + chunk
-            if needle in data:
-                return True
-            overlap = data[-(len(needle) - 1):]
+    binary = Path(path).resolve()
+    candidates = [binary, *sorted(binary.parent.glob("*.so*"))]
+    seen = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not resolved.is_file():
+            continue
+        seen.add(resolved)
+        overlap = b""
+        with resolved.open("rb") as source:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                data = overlap + chunk
+                if needle in data:
+                    return True
+                overlap = data[-(len(needle) - 1):]
     raise RuntimeError(
         "diagnostic server binary does not contain PHASE_MARK; C03 stops "
         "before measurement rather than using weaker ground truth"

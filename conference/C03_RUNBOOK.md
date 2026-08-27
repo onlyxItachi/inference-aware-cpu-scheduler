@@ -1,118 +1,203 @@
-# TASK-C03 minimal generality smoke runbook
+# TASK-C03 AMD cross-vendor smoke runbook
 
-## Frozen selection
+## Frozen scope
 
 **SELECTED C03 PATH: `CROSS_VENDOR`**
 
-C03 changes exactly one generality axis: the heterogeneous CPU
-vendor/platform. It does not run the fallback model path in the same campaign.
-The implementation can validate a future `FALLBACK_MODEL` configuration, but
-that path is not selected or authorized by this runbook. Do not execute both
-paths.
+The target is an AMD Ryzen AI 9 HX 370 with 12 physical cores and 24 logical
+CPUs. C03 changes one generality axis: CPU vendor/platform. The smoke contains
+only `BIG_ONLY` and `ALL_CORES`, two randomized rounds, and four measured
+requests. It does not add stock, external/oracle scheduling, intermediate
+splits, contention, sched_ext, or a second model-family axis.
 
-The first checkpoint is only two randomized rounds containing `BIG_ONLY` and
-`ALL_CORES` once per round: four measured requests total. A six-round run is
-not authorized and no full-run command is provided here.
+No six-round command is provided or authorized. Review the four-run output
+with ChatGPT before any extension and do not start C04.
 
-## Required configuration review
+## Collaborator quick start
 
-Before running, fill in the four hardware-specific placeholders in the smoke
-command after inspecting the second system:
+Clone the `AMD` branch, including the pinned llama.cpp submodule:
 
-- `<BIG_CPU_LIST>`: explicit Linux CPU list for the operationally faster core
-  class, such as a comma/range expression.
-- `<COMPACT_CPU_LIST>`: explicit, non-overlapping Linux CPU list for the other
-  core class.
-- `<BIG_THREAD_COUNT>`: runtime thread count for `BIG_ONLY`.
-- `<ALL_THREAD_COUNT>`: runtime thread count for `ALL_CORES`.
+```bash
+git clone --branch AMD --recurse-submodules <REPOSITORY_URL>
+cd inference-aware-cpu-scheduler
+```
 
-`big` and `compact` are operational experiment labels supplied by this
-configuration. They do not claim architectural equivalence to Intel P/E
-cores. The runner records the exact masks and refuses overlapping, offline, or
-disallowed CPUs.
+The repository does not contain or guess a model download URL. Place the
+exact `Qwen3.5-9B-Q4_K_M.gguf` at
+`models/Qwen3.5-9B-Q4_K_M.gguf`, or pass its existing path to preflight.
 
-Use the same diagnostic `llama-server` build, model, prompt, request length,
-and runtime settings in both arms. The diagnostic build must emit
-`PHASE_MARK batched=... t_mono_ns=...`. If the first internally marked
-unbatched decode computation cannot be recovered, the runner stops and
-preserves the failure/server log; do not substitute first-token arrival or a
-weaker ground truth.
+Preflight never builds or starts inference. On a fresh clone it will therefore
+tell you to build the diagnostic runtime first:
 
-The live marker watcher is record-only in both arms. It labels detector samples
-offline and never supplies a detector or placement decision. C03 applies only
-the arm's initial static `taskset` mask; it contains no external, oracle,
-dynamic-affinity, contention, stock, or sched_ext arm.
+```bash
+./conference/tools/c03_cross_vendor.sh build-diag
+```
 
-## Frozen zero-shot detector
+This explicit subcommand checks for `git`, `cmake`, `c++`, `make`, and `python3`,
+initializes the pinned submodule if needed, applies the frozen diagnostic
+patch, and builds `llama-server` locally. It never installs packages or invokes
+`sudo`.
 
-The first smoke uses the unchanged Intel detector configuration:
+Then run the required gate, adding `--model /absolute/path/Qwen3.5-9B-Q4_K_M.gguf`
+if the model is elsewhere:
+
+```bash
+./conference/tools/c03_cross_vendor.sh preflight
+```
+
+Only after it prints `PRECHECK STATUS: PASS`:
+
+```bash
+./conference/tools/c03_cross_vendor.sh smoke
+```
+
+The smoke automatically runs the analyzer and prints the collaborator handoff.
+Analysis can also be regenerated without inference:
+
+```bash
+./conference/tools/c03_cross_vendor.sh analyze
+```
+
+Smoke consumes the model path and hashes persisted by preflight; it does not
+accept a replacement.
+
+## Diagnostic build provenance
+
+The pinned llama.cpp submodule commit is:
 
 ```text
-mode     = zero_shot
-interval = 20 ms
-hi       = 3000
-lo       = 2100
-k        = 2
+571d0d540df04f25298d0e159e520d9fc62ed121
 ```
 
-This tests zero-shot threshold transfer separately from signal generality.
-Changing any value while labeling the run `zero_shot` is rejected.
-Recalibrated thresholds are a later, separately labeled inspection and are not
-part of this smoke.
+The C01/C02 diagnostic source modification had been temporary and
+uncommitted, although the compiled binary was preserved. Historical object
+code establishes that it used `clock_gettime(CLOCK_MONOTONIC)`, emitted the
+marker on the first graph computation and batched-state changes, and flushed
+this exact record:
 
-## Two-round CROSS_VENDOR smoke (only authorized benchmark command)
-
-Replace the four angle-bracketed topology/thread values before execution:
-
-```bash
-python3 conference/experiments/c03_generality.py \
-  --path CROSS_VENDOR \
-  --big-cpus '<BIG_CPU_LIST>' \
-  --compact-cpus '<COMPACT_CPU_LIST>' \
-  --threads-big <BIG_THREAD_COUNT> \
-  --threads-all <ALL_THREAD_COUNT> \
-  --server-bin llama.cpp/build-diag/bin/llama-server \
-  --model models/Qwen3.5-9B-Q4_K_M.gguf \
-  --prompt harness/prompt_512.txt \
-  --rounds 2 \
-  --order-seed 3304 \
-  --detector-mode zero_shot \
-  --interval-ms 20 \
-  --hi 3000 \
-  --lo 2100 \
-  --k 2 \
-  --ctx 2048 \
-  --batch 2048 \
-  --ubatch 512 \
-  --n-predict 256 \
-  --seed 42 \
-  --port 8140 \
-  --initial-cooldown 30 \
-  --cooldown 30 \
-  --outdir results/conference_c03
+```text
+PHASE_MARK batched=%d t_mono_ns=%lld
 ```
 
-If execution is interrupted, repeat the identical command with `--resume`.
-The persisted plan must match exactly; completed run JSON files are skipped and
-never overwritten.
+That instrumentation is now frozen in
+`conference/diagnostic/llama_cpp_phase_mark.patch`; its semantics are described
+in `conference/diagnostic/PHASE_MARK.md`. The AMD machine builds from the same
+pinned source plus that patch. Do not copy the Intel-built executable.
 
-## Analysis after all four runs
+The build helper explicitly preserves the historical CMake policy:
 
-```bash
-python3 conference/analysis/c03_analyze.py \
-  --input results/conference_c03
+```text
+CMAKE_BUILD_TYPE=Release
+BUILD_SHARED_LIBS=ON
+GGML_NATIVE=ON
+GGML_OPENMP=ON
+GGML_OPENMP_ENABLED=ON
+LLAMA_BUILD_SERVER=ON
 ```
 
-The analyzer writes `c03_runs.csv`, `signal_summary.csv`, `summary.json`, and
-`summary.md`. It reports `ALL_CORES` minus `BIG_ONLY`, phase-labeled raw signal
-distributions, range overlap/separation observations, unchanged-threshold
-transition counts, and detection timing relative to the first internally
-marked unbatched decode computation. It does not declare that a phenomenon
-generalizes and does not perform C05-level inference.
+`GGML_NATIVE=ON` is retained because it was the frozen historical build policy;
+the actual AMD compiler and build identity are recorded. Missing dependencies
+are reported but never installed automatically.
 
-## Artifacts
+Preflight verifies the exact marker format in the executable or its sibling
+shared libraries. The semantic ground truth remains the first measured-request
+marker with `batched=0`: the first internally marked unbatched decode
+computation. It labels samples offline only and never affects the external
+detector or placement.
 
-Raw evidence remains separate under:
+## Conservative topology selection
+
+No CPU ID is hard-coded. Preflight:
+
+1. reads online and allowed CPUs;
+2. groups logical CPUs into physical cores using package/core IDs and each
+   CPU's `thread_siblings_list`;
+3. keeps SMT enabled but chooses one allowed logical representative per
+   physical core;
+4. seeks a clean 4-core higher-performance and 8-core compact/lower-performance
+   split, preferring CPPC `highest_perf`, then static maximum frequency, then
+   another exposed capacity class;
+5. rejects disagreeing hardware classifications, overlaps, duplicate SMT
+   siblings, offline CPUs, and CPUs outside the caller's allowed affinity.
+
+The frozen experimental masks contain four physical-core representatives for
+`BIG_ONLY` and those four plus eight compact representatives for `ALL_CORES`.
+Thread counts are 4 and 12 respectively.
+
+Transient current frequency is not used for classification. If no clean split
+exists, preflight returns `PRECHECK_NEEDS_REVIEW`, writes a physical-core table,
+and does not create a smoke-authorizing topology file. Do not guess masks.
+
+`--allow-non-hx370` exists only to collect debugging evidence on another AMD
+topology. It can never produce a smoke-authorizing PASS.
+
+## Preflight evidence and machine hygiene
+
+Preflight preserves the following under
+`results/conference_c03/preflight/`:
+
+```text
+topology.json
+environment.txt
+selected_topology.json       # PASS only
+c03_topology.env             # PASS only; consumed by smoke
+preflight_status.json
+preflight_summary.md
+history/                     # prior preflight snapshots
+```
+
+The evidence includes kernel/uname, CPU model and vendor, full `lscpu` and
+extended topology, online/allowed masks, physical IDs and SMT siblings,
+per-CPU maximum frequency, CPPC performance fields, scaling driver, governor,
+EPP, amd_pstate status/prefcore, boost, power profile, AC state, readable
+temperatures, Git commit/dirty state, submodule commit, diagnostic patch/build
+identity, compiler, binary hash, model path/hash, and marker capability.
+
+Run plugged in under one fixed power profile. Preflight warns but never changes
+anything when it sees battery operation, mixed governors/EPPs, disabled boost,
+or an already-high temperature. Do not try to match the Intel machine's
+wattage; C03 checks effect direction, not normalized cross-machine scores.
+
+## Smoke fail-safe and frozen protocol
+
+Before inference, `smoke` revalidates the persisted PASS against live online
+CPUs, allowed affinity, physical-core membership, Git commit, model hash,
+diagnostic build/patch/CMake identity, exact marker format, and any existing
+C03 plan. It consumes `c03_topology.env`; it never redetects or silently
+changes masks.
+
+The launcher passes exactly:
+
+```text
+--path CROSS_VENDOR
+--rounds 2
+--order-seed 3304
+--detector-mode zero_shot
+--interval-ms 20
+--hi 3000
+--lo 2100
+--k 2
+--ctx 2048
+--batch 2048
+--ubatch 512
+--n-predict 256
+--seed 42
+--initial-cooldown 30
+--cooldown 30
+```
+
+The unchanged Intel thresholds test zero-shot transfer separately from raw
+signal separability. Recalibration is not part of this smoke.
+
+The launcher calls the existing
+`conference/experiments/c03_generality.py`; it contains no duplicate benchmark
+implementation. A failed gate, incompatible plan, missing marker/model/build,
+or ambiguous topology stops before inference. No privileged command,
+scheduler change, or system-setting mutation is performed.
+
+## Outputs and handoff
+
+Raw evidence remains under:
 
 ```text
 results/conference_c03/raw/
@@ -124,7 +209,7 @@ results/conference_c03/raw/
   server_logs/
 ```
 
-Derived/index artifacts are:
+Derived artifacts are:
 
 ```text
 results/conference_c03/c03_runs.csv
@@ -133,6 +218,13 @@ results/conference_c03/summary.json
 results/conference_c03/summary.md
 ```
 
-Bring the raw detector traces, phase logs, summary files, failure directory if
-present, exact topology configuration, and machine-state metadata to the C03
-checkpoint review. Do not start C04 from this runbook.
+After four successful runs the launcher prints precheck status, CPU model,
+masks, thread counts, Git commit, binary/model identities, run status, and
+output directory. Send back the complete directory:
+
+```text
+results/conference_c03/
+```
+
+The analyzer reports observations only. It does not automatically claim that
+placement behavior, signal separation, or the frozen threshold generalizes.

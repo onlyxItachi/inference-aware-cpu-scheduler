@@ -124,6 +124,14 @@ class C03RunnerTests(unittest.TestCase):
             diagnostic.write_bytes(b"prefix PHASE_MARK suffix")
             self.assertTrue(C03.verify_phase_mark_binary(diagnostic))
 
+    def test_phase_marker_may_reside_in_sibling_shared_library(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            binary = Path(tmp) / "llama-server"
+            binary.write_bytes(b"launcher")
+            library = Path(tmp) / "libllama.so.0"
+            library.write_bytes(b"PHASE_MARK")
+            self.assertTrue(C03.verify_phase_mark_binary(binary))
+
     def test_plan_preserves_selected_path_topology_and_schedule(self):
         args = SimpleNamespace(
             path="CROSS_VENDOR", rounds=2, order_seed=3304,
