@@ -84,22 +84,50 @@ That instrumentation is now frozen in
 in `conference/diagnostic/PHASE_MARK.md`. The AMD machine builds from the same
 pinned source plus that patch. Do not copy the Intel-built executable.
 
-The build helper explicitly preserves the historical CMake policy adapted for AVX2 ISA parity:
+### Historical Intel C01/C02 build record
+
+The frozen historical Intel diagnostic build policy was:
 
 ```text
 CMAKE_BUILD_TYPE=Release
 BUILD_SHARED_LIBS=ON
-GGML_NATIVE=OFF
-GGML_AVX2=ON
-GGML_AVX512=OFF
+GGML_NATIVE=ON
 GGML_OPENMP=ON
 GGML_OPENMP_ENABLED=ON
 LLAMA_BUILD_SERVER=ON
 ```
 
-`GGML_NATIVE=OFF` with explicit `GGML_AVX2=ON` and `GGML_AVX512=OFF` is used to enforce
-strict ISA parity with the Intel baseline CPU (which does not support AVX-512). Missing dependencies
-are reported but never installed automatically.
+This historical C01/C02 record is preserved as written; it was not an
+AVX2-constrained build.
+
+### C03 AMD protocol amendment
+
+The official AMD HX 370 C03 smoke intentionally used the build helper's
+AVX2-constrained diagnostic configuration:
+
+```text
+CMAKE_BUILD_TYPE=Release
+BUILD_SHARED_LIBS=ON
+GGML_NATIVE=OFF
+GGML_AVX=ON
+GGML_AVX2=ON
+GGML_FMA=ON
+GGML_F16C=ON
+GGML_AVX512=OFF
+GGML_AVX512_VBMI=OFF
+GGML_AVX512_VNNI=OFF
+GGML_AVX512_BF16=OFF
+GGML_OPENMP=ON
+GGML_OPENMP_ENABLED=ON
+LLAMA_BUILD_SERVER=ON
+```
+
+This protocol amendment uses an AVX2-constrained build to reduce AMD-only
+AVX-512 vector-width capability as an additional cross-vendor confound. It is
+only a reduction of one vector-width difference: it does not make the two
+architectures equivalent or isolate core topology. The AMD AVX2 smoke remains
+the official C03 smoke dataset. Missing dependencies are reported but never
+installed automatically.
 
 Preflight verifies the exact marker format in the executable or its sibling
 shared libraries. The semantic ground truth remains the first measured-request
@@ -227,6 +255,12 @@ output directory. Send back the complete directory:
 ```text
 results/conference_c03/
 ```
+
+The PR currently preserves the derived CSV/Markdown output and preflight
+metadata, but it does not contain the raw detector, phase, or server logs. The
+complete collaborator-side `results/conference_c03/` directory should be
+archived separately before the final paper evidence freeze. Do not reconstruct
+or invent absent raw artifacts.
 
 The analyzer reports observations only. It does not automatically claim that
 placement behavior, signal separation, or the frozen threshold generalizes.
