@@ -25,12 +25,15 @@ The historical diagnostic CMake cache recorded:
 ```text
 CMAKE_BUILD_TYPE=Release
 BUILD_SHARED_LIBS=ON
-GGML_NATIVE=ON
+GGML_NATIVE=OFF
+GGML_AVX2=ON
+GGML_AVX512=OFF
 GGML_OPENMP=ON
 GGML_OPENMP_ENABLED=ON
 LLAMA_BUILD_SERVER=ON
 ```
 
-The AMD build helper freezes these options explicitly. `GGML_NATIVE=ON` is
-retained because it was the historical build policy; the AMD collaborator
+The AMD build helper freezes these options explicitly to enforce strict AVX2 ISA
+parity with the Intel i7-14650HX baseline (which lacks AVX-512), ensuring cross-vendor
+comparisons isolate core topology rather than ISA vector-width differences. The AMD collaborator
 must build on the AMD machine rather than copy the Intel-built binary.

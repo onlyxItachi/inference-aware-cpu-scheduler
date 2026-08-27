@@ -79,7 +79,15 @@ build_diagnostic() {
     cmake -S "${LLAMA_DIR}" -B "${LLAMA_DIR}/build-diag" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=ON \
-        -DGGML_NATIVE=ON \
+        -DGGML_NATIVE=OFF \
+        -DGGML_AVX=ON \
+        -DGGML_AVX2=ON \
+        -DGGML_FMA=ON \
+        -DGGML_F16C=ON \
+        -DGGML_AVX512=OFF \
+        -DGGML_AVX512_VBMI=OFF \
+        -DGGML_AVX512_VNNI=OFF \
+        -DGGML_AVX512_BF16=OFF \
         -DGGML_OPENMP=ON \
         -DLLAMA_BUILD_SERVER=ON
     cmake --build "${LLAMA_DIR}/build-diag" --target llama-server --parallel "${C03_BUILD_JOBS:-1}"

@@ -84,19 +84,21 @@ That instrumentation is now frozen in
 in `conference/diagnostic/PHASE_MARK.md`. The AMD machine builds from the same
 pinned source plus that patch. Do not copy the Intel-built executable.
 
-The build helper explicitly preserves the historical CMake policy:
+The build helper explicitly preserves the historical CMake policy adapted for AVX2 ISA parity:
 
 ```text
 CMAKE_BUILD_TYPE=Release
 BUILD_SHARED_LIBS=ON
-GGML_NATIVE=ON
+GGML_NATIVE=OFF
+GGML_AVX2=ON
+GGML_AVX512=OFF
 GGML_OPENMP=ON
 GGML_OPENMP_ENABLED=ON
 LLAMA_BUILD_SERVER=ON
 ```
 
-`GGML_NATIVE=ON` is retained because it was the frozen historical build policy;
-the actual AMD compiler and build identity are recorded. Missing dependencies
+`GGML_NATIVE=OFF` with explicit `GGML_AVX2=ON` and `GGML_AVX512=OFF` is used to enforce
+strict ISA parity with the Intel baseline CPU (which does not support AVX-512). Missing dependencies
 are reported but never installed automatically.
 
 Preflight verifies the exact marker format in the executable or its sibling

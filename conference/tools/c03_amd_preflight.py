@@ -478,7 +478,9 @@ def verify_diagnostic_build(repo_root, server_bin):
     expected = {
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_SHARED_LIBS": "ON",
-        "GGML_NATIVE": "ON",
+        "GGML_NATIVE": "OFF",
+        "GGML_AVX2": "ON",
+        "GGML_AVX512": "OFF",
         "GGML_OPENMP": "ON",
         "GGML_OPENMP_ENABLED": "ON",
         "LLAMA_BUILD_SERVER": "ON",
