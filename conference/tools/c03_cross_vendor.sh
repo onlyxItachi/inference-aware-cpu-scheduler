@@ -19,6 +19,7 @@ Usage:
   ./conference/tools/c03_cross_vendor.sh build-diag
   ./conference/tools/c03_cross_vendor.sh preflight [--model PATH] [--server-bin PATH] [--outdir PATH]
   ./conference/tools/c03_cross_vendor.sh smoke [--outdir PATH]
+  ./conference/tools/c03_cross_vendor.sh pilot [--start-round ROUND] [--outdir PATH]
   ./conference/tools/c03_cross_vendor.sh analyze [--outdir PATH]
 
 Debug inspection only (cannot authorize smoke):
@@ -137,6 +138,11 @@ while (($#)); do
             OUTDIR=$2
             shift 2
             ;;
+        --start-round)
+            [[ $# -ge 2 ]] || { echo "--start-round requires INT" >&2; exit 2; }
+            START_ROUND=$2
+            shift 2
+            ;;
         --allow-non-hx370)
             ALLOW_NON_HX370=1
             shift
@@ -230,6 +236,54 @@ case "${COMMAND}" in
             exit 2
         fi
         require_commands python3
+        python3 "${ANALYZER}" --input "${OUTDIR}"
+        python3 "${HELPER}" handoff --outdir "${OUTDIR}"
+        ;;
+    pilot)
+        if ((ALLOW_NON_HX370)); then
+            echo "--allow-non-hx370 cannot be used with pilot" >&2
+            exit 2
+        fi
+        if ((MODEL_EXPLICIT || SERVER_EXPLICIT)); then
+            echo "pilot consumes the model and binary frozen by preflight; replacement options are forbidden" >&2
+            exit 2
+        fi
+        require_commands python3 taskset
+        python3 "${HELPER}" verify --outdir "${OUTDIR}"
+        topology_env="${OUTDIR}/preflight/c03_topology.env"
+        if [[ ! -f "${topology_env}" ]]; then
+            echo "Successful preflight configuration missing: ${topology_env}" >&2
+            exit 2
+        fi
+        source "${topology_env}"
+        python3 "${RUNNER}" \
+            --path CROSS_VENDOR \
+            --big-cpus "${C03_BIG_CPUS}" \
+            --compact-cpus "${C03_COMPACT_CPUS}" \
+            --threads-big "${C03_THREADS_BIG}" \
+            --threads-all "${C03_THREADS_ALL}" \
+            --server-bin "${C03_SERVER_BIN}" \
+            --model "${C03_MODEL}" \
+            --prompt "${REPO_ROOT}/harness/prompt_512.txt" \
+            --rounds 6 \
+            --start-round "${START_ROUND:-3}" \
+            --order-seed 3304 \
+            --detector-mode zero_shot \
+            --interval-ms 20 \
+            --hi 3000 \
+            --lo 2100 \
+            --k 2 \
+            --ctx 2048 \
+            --batch 2048 \
+            --ubatch 512 \
+            --n-predict 256 \
+            --seed 42 \
+            --port 8140 \
+            --initial-cooldown 30 \
+            --cooldown 30 \
+            --outdir "${OUTDIR}" \
+            --resume \
+            --full-pilot-approved
         python3 "${ANALYZER}" --input "${OUTDIR}"
         python3 "${HELPER}" handoff --outdir "${OUTDIR}"
         ;;

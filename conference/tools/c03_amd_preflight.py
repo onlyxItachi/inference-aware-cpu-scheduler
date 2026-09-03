@@ -717,7 +717,7 @@ def check_existing_plan(outdir, selected):
     if (
         plan.get("task") != "TASK-C03"
         or plan.get("selected_c03_path") != "CROSS_VENDOR"
-        or plan.get("rounds") != 2
+        or plan.get("rounds") not in (2, 6)
         or plan.get("order_seed") != 3304
         or plan.get("topology") != expected_topology
         or plan.get("detector") != expected_detector
@@ -1024,6 +1024,7 @@ def handoff(args):
         except (OSError, json.JSONDecodeError):
             pass
     valid = [run for run in runs if run.get("status") == "ok"]
+    expected_runs = 12 if len(runs) > 4 else 4
     print(f"PRECHECK STATUS: {status.get('precheck_status')}")
     print(f"CPU MODEL: {selected.get('cpu_model')}")
     print(f"BIG MASK: {cpu_list_text(selected['big_cpus'])}")
@@ -1032,10 +1033,10 @@ def handoff(args):
     print(f"GIT COMMIT: {selected.get('git_commit')}")
     print(f"BINARY ID: {selected['diagnostic_build']['server_binary']['sha256']}")
     print(f"MODEL ID: {selected['model']['sha256']}")
-    print(f"4 RUN STATUS: {len(valid)}/4 valid")
+    print(f"RUN STATUS: {len(valid)}/{expected_runs} valid")
     print(f"OUTPUT DIRECTORY: {outdir}")
     print(f"SEND BACK: {outdir}")
-    return 0 if len(valid) == 4 else 2
+    return 0 if len(valid) == expected_runs else 2
 
 
 def parse_args(argv=None):

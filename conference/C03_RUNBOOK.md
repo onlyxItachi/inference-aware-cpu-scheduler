@@ -52,13 +52,22 @@ Only after it prints `PRECHECK STATUS: PASS`:
 ```
 
 The smoke automatically runs the analyzer and prints the collaborator handoff.
+
+After the smoke output has been reviewed and explicit continuation is approved,
+the 6-round pilot extends the plan while selecting only absolute rounds 3–6, preserving
+completed smoke rounds 1–2:
+
+```bash
+./conference/tools/c03_cross_vendor.sh pilot
+```
+
 Analysis can also be regenerated without inference:
 
 ```bash
 ./conference/tools/c03_cross_vendor.sh analyze
 ```
 
-Smoke consumes the model path and hashes persisted by preflight; it does not
+Smoke and pilot consume the model path and hashes persisted by preflight; they do not
 accept a replacement.
 
 ## Diagnostic build provenance
