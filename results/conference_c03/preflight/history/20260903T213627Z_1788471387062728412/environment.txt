@@ -1,11 +1,11 @@
-captured_at=2026-09-03T21:36:30Z
+captured_at=2026-09-03T21:35:46Z
 kernel=uname_result(system='Linux', node='hamza-usta-ASUS-TUF-Gaming-A14-FA401WV-FA401WV', release='7.0.0-27-generic', version='#27-Ubuntu SMP PREEMPT_DYNAMIC Thu Jun 18 19:13:49 UTC 2026', machine='x86_64')
 cpu_identity={"architecture": "x86_64", "model_name": "AMD Ryzen AI 9 HX 370 w/ Radeon 890M", "vendor_id": "AuthenticAMD"}
 online_cpus=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23
 allowed_affinity=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23
-git={"branch": "AMD", "commit": "0255eaf6cd16f87ad17da2a3fc00ada77f2934fd", "dirty_porcelain": "M llama.cpp\n M results/conference_c03/preflight/environment.txt\n M results/conference_c03/preflight/preflight_summary.md\n?? results/conference_c03/preflight/history/20260903T213542Z_1788471342304968602/c03_topology.env\n?? results/conference_c03/preflight/history/20260903T213542Z_1788471342304968602/environment.txt\n?? results/conference_c03/preflight/history/20260903T213542Z_1788471342304968602/preflight_summary.md\n?? results/conference_c03/preflight/history/20260903T213627Z_1788471387062728412/c03_topology.env\n?? results/conference_c03/preflight/history/20260903T213627Z_1788471387062728412/environment.txt\n?? results/conference_c03/preflight/history/20260903T213627Z_1788471387062728412/preflight_summary.md", "submodule_status": "571d0d540df04f25298d0e159e520d9fc62ed121 llama.cpp (gguf-v0.19.0-1022-g571d0d540)", "tracked_dirty_porcelain": "M llama.cpp\n M results/conference_c03/preflight/environment.txt\n M results/conference_c03/preflight/preflight_summary.md"}
+git={"branch": "AMD", "commit": "36f108a1ac5f35f76a6f97d0c49acaa5dd63e9eb", "dirty_porcelain": "M llama.cpp\n?? results/conference_c03/preflight/history/20260903T213542Z_1788471342304968602/c03_topology.env\n?? results/conference_c03/preflight/history/20260903T213542Z_1788471342304968602/environment.txt\n?? results/conference_c03/preflight/history/20260903T213542Z_1788471342304968602/preflight_summary.md", "submodule_status": "571d0d540df04f25298d0e159e520d9fc62ed121 llama.cpp (gguf-v0.19.0-1022-g571d0d540)", "tracked_dirty_porcelain": "M llama.cpp"}
 power={"ac_online": {"/sys/class/power_supply/ADP0/online": "1"}, "amd_pstate_prefcore": "disabled", "amd_pstate_status": "active", "boost": {"/sys/devices/system/cpu/cpufreq/boost": "1"}, "changes_during_preflight": {}, "epp": ["performance"], "governors": ["performance"], "platform_profile": "performance", "powerprofilesctl": {"command": ["powerprofilesctl", "get"], "returncode": 0, "stderr": "", "stdout": "performance"}, "scaling_drivers": ["amd-pstate-epp"], "warnings": []}
-thermal={"selected_c": 61.5, "sensors_c": {"acpitz:temp1_input:/sys/class/hwmon/hwmon2/temp1_input": 61.0, "amdgpu:edge:/sys/class/hwmon/hwmon12/temp1_input": 47.0, "k10temp:Tctl:/sys/class/hwmon/hwmon7/temp1_input": 61.5, "mt7921_phy0:temp1_input:/sys/class/hwmon/hwmon11/temp1_input": 44.0, "nvme:Composite:/sys/class/hwmon/hwmon4/temp1_input": 29.85, "nvme:Composite:/sys/class/hwmon/hwmon5/temp1_input": 38.85, "nvme:Sensor 1:/sys/class/hwmon/hwmon4/temp2_input": 29.85, "nvme:Sensor 1:/sys/class/hwmon/hwmon5/temp2_input": 39.85, "nvme:Sensor 2:/sys/class/hwmon/hwmon5/temp3_input": 38.85}, "warnings": []}
+thermal={"selected_c": 62.375, "sensors_c": {"acpitz:temp1_input:/sys/class/hwmon/hwmon2/temp1_input": 62.0, "amdgpu:edge:/sys/class/hwmon/hwmon12/temp1_input": 48.0, "k10temp:Tctl:/sys/class/hwmon/hwmon7/temp1_input": 62.375, "mt7921_phy0:temp1_input:/sys/class/hwmon/hwmon11/temp1_input": 44.0, "nvme:Composite:/sys/class/hwmon/hwmon4/temp1_input": 30.85, "nvme:Composite:/sys/class/hwmon/hwmon5/temp1_input": 38.85, "nvme:Sensor 1:/sys/class/hwmon/hwmon4/temp2_input": 30.85, "nvme:Sensor 1:/sys/class/hwmon/hwmon5/temp2_input": 39.85, "nvme:Sensor 2:/sys/class/hwmon/hwmon5/temp3_input": 38.85}, "warnings": []}
 
 ===== uname -a =====
 Linux hamza-usta-ASUS-TUF-Gaming-A14-FA401WV-FA401WV 7.0.0-27-generic #27-Ubuntu SMP PREEMPT_DYNAMIC Thu Jun 18 19:13:49 UTC 2026 x86_64 GNU/Linux
@@ -26,7 +26,7 @@ Soket başına çekirdek:                   12
 Soket(ler):                              1
 Adımlama:                                0
 Frequency boost:                         enabled
-CPU(s) scaling MHz:                      37%
+CPU(s) scaling MHz:                      33%
 İşlemci en yüksek MHz:                   5157,8950
 İşlemci asgari MHz:                      605,2640
 BogoMIPS:                                3999,85
@@ -61,23 +61,23 @@ Vulnerability itlb multihit:             Not affected
 ===== lscpu -e =====
 CPU NODE SOCKET CORE L1d:L1i:L2:L3 ONLINE    MAXMHZ   MINMHZ       MHZ
   0    0      0    0 0:0:0:0         evet 5157,8950 605,2640  605,2640
-  1    0      0    1 1:1:1:0         evet 5157,8950 605,2640 5158,8721
-  2    0      0    2 2:2:2:0         evet 5157,8950 605,2640 2016,8101
-  3    0      0    3 3:3:3:0         evet 5157,8950 605,2640  605,2640
-  4    0      0    4 8:8:8:1         evet 3289,4741 605,2640 3303,7271
-  5    0      0    5 9:9:9:1         evet 3289,4741 605,2640 1922,3500
-  6    0      0    6 10:10:10:1      evet 3289,4741 605,2640 1820,8590
-  7    0      0    7 11:11:11:1      evet 3289,4741 605,2640  605,2640
-  8    0      0    8 12:12:12:1      evet 3289,4741 605,2640 1923,4520
-  9    0      0    9 13:13:13:1      evet 3289,4741 605,2640  605,2640
- 10    0      0   10 14:14:14:1      evet 3289,4741 605,2640 3285,4060
- 11    0      0   11 15:15:15:1      evet 3289,4741 605,2640 2074,2510
- 12    0      0    0 0:0:0:0         evet 5157,8950 605,2640 2015,5490
+  1    0      0    1 1:1:1:0         evet 5157,8950 605,2640  605,2640
+  2    0      0    2 2:2:2:0         evet 5157,8950 605,2640  605,2640
+  3    0      0    3 3:3:3:0         evet 5157,8950 605,2640 5161,5259
+  4    0      0    4 8:8:8:1         evet 3289,4741 605,2640  605,2640
+  5    0      0    5 9:9:9:1         evet 3289,4741 605,2640  605,2640
+  6    0      0    6 10:10:10:1      evet 3289,4741 605,2640  605,2640
+  7    0      0    7 11:11:11:1      evet 3289,4741 605,2640 3310,6709
+  8    0      0    8 12:12:12:1      evet 3289,4741 605,2640  605,2640
+  9    0      0    9 13:13:13:1      evet 3289,4741 605,2640 3312,2029
+ 10    0      0   10 14:14:14:1      evet 3289,4741 605,2640 1945,6390
+ 11    0      0   11 15:15:15:1      evet 3289,4741 605,2640  605,2640
+ 12    0      0    0 0:0:0:0         evet 5157,8950 605,2640 1903,4590
  13    0      0    1 1:1:1:0         evet 5157,8950 605,2640  605,2640
- 14    0      0    2 2:2:2:0         evet 5157,8950 605,2640 1713,0551
- 15    0      0    3 3:3:3:0         evet 5157,8950 605,2640  605,2640
- 16    0      0    4 8:8:8:1         evet 3289,4741 605,2640  605,2640
- 17    0      0    5 9:9:9:1         evet 3289,4741 605,2640  605,2640
+ 14    0      0    2 2:2:2:0         evet 5157,8950 605,2640  605,2640
+ 15    0      0    3 3:3:3:0         evet 5157,8950 605,2640 5130,2788
+ 16    0      0    4 8:8:8:1         evet 3289,4741 605,2640 1985,7070
+ 17    0      0    5 9:9:9:1         evet 3289,4741 605,2640 1940,0410
  18    0      0    6 10:10:10:1      evet 3289,4741 605,2640  605,2640
  19    0      0    7 11:11:11:1      evet 3289,4741 605,2640  605,2640
  20    0      0    8 12:12:12:1      evet 3289,4741 605,2640  605,2640
@@ -93,7 +93,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 3710.774
+cpu MHz		: 605.264
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -121,7 +121,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 5158.872
+cpu MHz		: 605.264
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -149,7 +149,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 2015.077
+cpu MHz		: 605.264
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -177,7 +177,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 605.264
+cpu MHz		: 5161.365
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -233,7 +233,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 1925.446
+cpu MHz		: 605.264
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -261,7 +261,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 1947.563
+cpu MHz		: 605.264
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -289,7 +289,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 605.264
+cpu MHz		: 3304.989
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -317,7 +317,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 3285.028
+cpu MHz		: 605.264
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -345,7 +345,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 605.264
+cpu MHz		: 3067.902
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -373,7 +373,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 1940.010
+cpu MHz		: 1940.017
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -401,7 +401,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 2074.251
+cpu MHz		: 605.264
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -429,7 +429,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 2015.562
+cpu MHz		: 1964.743
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -485,7 +485,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 1713.055
+cpu MHz		: 605.264
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -513,7 +513,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 605.264
+cpu MHz		: 5130.279
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -541,7 +541,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 605.264
+cpu MHz		: 1978.483
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24
@@ -569,7 +569,7 @@ model		: 36
 model name	: AMD Ryzen AI 9 HX 370 w/ Radeon 890M
 stepping	: 0
 microcode	: 0xb20401b
-cpu MHz		: 605.264
+cpu MHz		: 1950.450
 cache size	: 1024 KB
 physical id	: 0
 siblings	: 24

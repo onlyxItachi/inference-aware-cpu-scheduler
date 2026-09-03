@@ -6,7 +6,7 @@
 - Vendor: AuthenticAMD
 - Physical/logical: 12/24
 - Allowed affinity: 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23
-- Git commit: 0255eaf6cd16f87ad17da2a3fc00ada77f2934fd
+- Git commit: 36f108a1ac5f35f76a6f97d0c49acaa5dd63e9eb
 - Error: none
 
 ## Physical-core evidence
