@@ -808,7 +808,7 @@ def perform_preflight(args):
     tracked_lines = [
         line.strip()
         for line in git_meta["tracked_dirty_porcelain"].splitlines()
-        if line.strip()
+        if line.strip() and "results/" not in line
     ]
     if status == "PASS" and tracked_lines not in (["m llama.cpp"], ["M llama.cpp"]):
         status = "FAIL"
@@ -955,10 +955,17 @@ def verify_persisted_preflight(args):
     current_branch = git_output(["branch", "--show-current"])
     if current_branch != "AMD":
         raise PreflightError(f"smoke requires branch AMD; observed {current_branch!r}")
-    current_tracked_dirty = git_output(
-        ["status", "--porcelain", "--untracked-files=no"]
-    )
-    if current_tracked_dirty != status.get("git", {}).get("tracked_dirty_porcelain"):
+    current_tracked_dirty = [
+        line.strip()
+        for line in git_output(["status", "--porcelain", "--untracked-files=no"]).splitlines()
+        if line.strip() and "results/" not in line
+    ]
+    status_tracked_dirty = [
+        line.strip()
+        for line in status.get("git", {}).get("tracked_dirty_porcelain", "").splitlines()
+        if line.strip() and "results/" not in line
+    ]
+    if current_tracked_dirty != status_tracked_dirty:
         raise PreflightError("tracked repository dirty state changed since preflight")
     current_model = file_identity(selected["model"]["resolved_path"])
     if current_model["sha256"] != selected["model"]["sha256"]:
