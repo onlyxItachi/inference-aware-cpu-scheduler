@@ -5,13 +5,15 @@
 **SELECTED C03 PATH: `CROSS_VENDOR`**
 
 The target is an AMD Ryzen AI 9 HX 370 with 12 physical cores and 24 logical
-CPUs. C03 changes one generality axis: CPU vendor/platform. The smoke contains
-only `BIG_ONLY` and `ALL_CORES`, two randomized rounds, and four measured
-requests. It does not add stock, external/oracle scheduling, intermediate
-splits, contention, sched_ext, or a second model-family axis.
+CPUs. C03 changes one generality axis: CPU vendor/platform. The authorized
+sequence began with a two-round, four-request smoke and, after review, extended
+to a completed six-round full pilot with 12 valid measured requests (n=6 per
+arm). It contains only `BIG_ONLY` and `ALL_CORES`; it does not add stock,
+external/oracle scheduling, intermediate splits, contention, sched_ext, or a
+second model-family axis.
 
-No six-round command is provided or authorized. Review the four-run output
-with ChatGPT before any extension and do not start C04.
+No additional run is authorized by this runbook. Review the completed pilot
+before any new experiment and do not start C04.
 
 ## Collaborator quick start
 
@@ -111,7 +113,7 @@ AVX2-constrained build.
 
 ### C03 AMD protocol amendment
 
-The official AMD HX 370 C03 smoke intentionally used the build helper's
+The official AMD HX 370 C03 pilot intentionally used the build helper's
 AVX2-constrained diagnostic configuration:
 
 ```text
@@ -134,8 +136,8 @@ LLAMA_BUILD_SERVER=ON
 This protocol amendment uses an AVX2-constrained build to reduce AMD-only
 AVX-512 vector-width capability as an additional cross-vendor confound. It is
 only a reduction of one vector-width difference: it does not make the two
-architectures equivalent or isolate core topology. The AMD AVX2 smoke remains
-the official C03 smoke dataset. Missing dependencies are reported but never
+architectures equivalent or isolate core topology. The AMD AVX2 full pilot
+remains the official C03 dataset. Missing dependencies are reported but never
 installed automatically.
 
 Preflight verifies the exact marker format in the executable or its sibling
@@ -265,11 +267,11 @@ output directory. Send back the complete directory:
 results/conference_c03/
 ```
 
-The PR currently preserves the derived CSV/Markdown output and preflight
-metadata, but it does not contain the raw detector, phase, or server logs. The
-complete collaborator-side `results/conference_c03/` directory should be
-archived separately before the final paper evidence freeze. Do not reconstruct
-or invent absent raw artifacts.
+The PR contains derived CSV/Markdown output and preflight metadata, but it does
+not track the raw detector, phase, or server logs. The complete
+collaborator-side `results/conference_c03/` directory, including those raw logs,
+must be archived separately before the final paper evidence freeze. Do not
+reconstruct or invent absent raw artifacts.
 
 The analyzer reports observations only. It does not automatically claim that
 placement behavior, signal separation, or the frozen threshold generalizes.

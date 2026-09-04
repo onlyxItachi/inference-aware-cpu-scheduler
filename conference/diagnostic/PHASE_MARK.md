@@ -38,7 +38,7 @@ described as a non-native, AVX2-constrained build.
 
 ## C03 AMD protocol amendment
 
-The official AMD HX 370 C03 smoke used a separately documented,
+The official AMD HX 370 C03 pilot used a separately documented,
 AVX2-constrained diagnostic build:
 
 ```text

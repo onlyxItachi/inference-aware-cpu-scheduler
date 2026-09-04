@@ -2,6 +2,9 @@
 
 Selected C03 path: **CROSS_VENDOR**. This is a descriptive minimal generality check; it does not automatically declare that placement behavior or external observability generalizes.
 
+The completed full pilot contains 6 randomized rounds and 12 valid measured
+runs, with n=6 per arm.
+
 The labels `big` and `compact` are operational labels supplied by the experiment configuration. They do not assert architectural equivalence to Intel P/E cores.
 
 ## Performance by arm
@@ -29,12 +32,16 @@ AVX-512 vector-width capability as an additional cross-vendor confound. It
 addresses only one vector-width difference and does not make the architectures
 equivalent or isolate core topology.
 
-In this four-run smoke, adding the configured compact-core representatives
-improved prefill performance. Unlike the historical Intel placement result,
-decode-tail latency and decode throughput also improved. Therefore, the Intel
-placement inversion did not reproduce on this AMD platform/configuration. This
-is a valid negative generality result, not an experiment failure. C03 did not
-test the microarchitectural mechanism behind the difference.
+On AMD Ryzen AI 9 HX 370 under the C03 AVX2-constrained configuration,
+ALL_CORES improved both prefill and decode performance relative to BIG_ONLY.
+Therefore, the Intel placement inversion did not reproduce on this
+platform/configuration. The frozen Intel detector thresholds produced no
+transitions in 12/12 runs, so zero-shot threshold transfer failed. These
+results constrain cross-vendor generality but do not invalidate the Intel
+external phase-recovery result. This is a valid negative generality result,
+not an experiment failure. C03 did not test the microarchitectural mechanism
+behind the difference, and this result does not establish universal AMD
+behavior.
 
 ## External signal observations
 
@@ -53,10 +60,11 @@ Frozen zero-shot detector: interval=20 ms, hi=3000, lo=2100, k=2.
 - BIG_ONLY: transitions 0 / 6; detect relative to internal boundary None
 - ALL_CORES: transitions 0 / 6; detect relative to internal boundary None
 
-The frozen Intel thresholds produced 0 / 4 transitions, so zero-shot threshold
-transfer failed in this smoke. The reported signal distributions may still
-contain phase information, but this smoke does not establish generalized
-cross-platform external observability.
+The frozen Intel thresholds produced 0 / 12 transitions in total
+(BIG_ONLY: 0 / 6; ALL_CORES: 0 / 6), so zero-shot threshold transfer failed in
+the full pilot. The reported signal distributions may still contain phase
+information, but this pilot does not establish generalized cross-platform
+external observability.
 
 Offsets are external criterion crossings relative to the first internally marked unbatched decode computation. Negative values are not automatically labeled prediction or anticipation.
 
@@ -70,7 +78,8 @@ Offsets are external criterion crossings relative to the first internally marked
 
 ## Raw artifact archival note
 
-This PR does not contain the raw detector, phase, or server logs. Archive the
-complete collaborator-side `results/conference_c03/` directory separately
-before the final paper evidence freeze. No absent raw artifact is reconstructed
-or represented by this note.
+The PR contains derived outputs and preflight metadata. The complete
+collaborator-side `results/conference_c03/` directory and its raw detector,
+phase, and server logs must be archived separately before the final paper
+evidence freeze. Those raw logs are not tracked in this PR; no absent raw
+artifact is reconstructed or represented by this note.

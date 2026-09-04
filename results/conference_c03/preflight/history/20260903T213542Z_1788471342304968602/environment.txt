@@ -1,5 +1,5 @@
 captured_at=2026-08-27T14:23:00Z
-kernel=uname_result(system='Linux', node='hamza-usta-ASUS-TUF-Gaming-A14-FA401WV-FA401WV', release='7.0.0-27-generic', version='#27-Ubuntu SMP PREEMPT_DYNAMIC Thu Jun 18 19:13:49 UTC 2026', machine='x86_64')
+kernel=uname_result(system='Linux', node='<HOST>', release='7.0.0-27-generic', version='#27-Ubuntu SMP PREEMPT_DYNAMIC Thu Jun 18 19:13:49 UTC 2026', machine='x86_64')
 cpu_identity={"architecture": "x86_64", "model_name": "AMD Ryzen AI 9 HX 370 w/ Radeon 890M", "vendor_id": "AuthenticAMD"}
 online_cpus=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23
 allowed_affinity=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23
@@ -8,7 +8,7 @@ power={"ac_online": {"/sys/class/power_supply/ADP0/online": "1"}, "amd_pstate_pr
 thermal={"selected_c": 61.125, "sensors_c": {"acpitz:temp1_input:/sys/class/hwmon/hwmon2/temp1_input": 61.0, "amdgpu:edge:/sys/class/hwmon/hwmon12/temp1_input": 48.0, "k10temp:Tctl:/sys/class/hwmon/hwmon7/temp1_input": 61.125, "mt7921_phy0:temp1_input:/sys/class/hwmon/hwmon11/temp1_input": 52.0, "nvme:Composite:/sys/class/hwmon/hwmon4/temp1_input": 34.85, "nvme:Composite:/sys/class/hwmon/hwmon5/temp1_input": 46.85, "nvme:Sensor 1:/sys/class/hwmon/hwmon4/temp2_input": 34.85, "nvme:Sensor 1:/sys/class/hwmon/hwmon5/temp2_input": 47.85, "nvme:Sensor 2:/sys/class/hwmon/hwmon5/temp3_input": 46.85}, "warnings": []}
 
 ===== uname -a =====
-Linux hamza-usta-ASUS-TUF-Gaming-A14-FA401WV-FA401WV 7.0.0-27-generic #27-Ubuntu SMP PREEMPT_DYNAMIC Thu Jun 18 19:13:49 UTC 2026 x86_64 GNU/Linux
+Linux <HOST> 7.0.0-27-generic #27-Ubuntu SMP PREEMPT_DYNAMIC Thu Jun 18 19:13:49 UTC 2026 x86_64 GNU/Linux
 
 ===== lscpu =====
 Mimari:                                  x86_64
