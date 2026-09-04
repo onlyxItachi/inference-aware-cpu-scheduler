@@ -201,6 +201,8 @@ case "${COMMAND}" in
         # topology file.
         # shellcheck disable=SC1090
         source "${topology_env}"
+        C03_SERVER_BIN="${C03_SERVER_BIN/<REPO_ROOT>/${REPO_ROOT}}"
+        C03_MODEL="${C03_MODEL/<REPO_ROOT>/${REPO_ROOT}}"
         python3 "${RUNNER}" \
             --path CROSS_VENDOR \
             --big-cpus "${C03_BIG_CPUS}" \
@@ -256,6 +258,8 @@ case "${COMMAND}" in
             exit 2
         fi
         source "${topology_env}"
+        C03_SERVER_BIN="${C03_SERVER_BIN/<REPO_ROOT>/${REPO_ROOT}}"
+        C03_MODEL="${C03_MODEL/<REPO_ROOT>/${REPO_ROOT}}"
         python3 "${RUNNER}" \
             --path CROSS_VENDOR \
             --big-cpus "${C03_BIG_CPUS}" \

@@ -629,14 +629,24 @@ def atomic_json(path, value):
     atomic_write(path, json.dumps(value, indent=2, sort_keys=True) + "\n")
 
 
+def redact_repo_root(path):
+    resolved = str(Path(path).resolve())
+    root_str = str(ROOT.resolve())
+    if resolved == root_str or resolved.startswith(root_str + "/"):
+        return f"<REPO_ROOT>{resolved[len(root_str):]}"
+    return resolved
+
+
 def topology_env_text(selected, build, model):
+    server_bin = redact_repo_root(build["server_binary"]["resolved_path"])
+    model_path = redact_repo_root(model["resolved_path"])
     return "\n".join((
         f"C03_BIG_CPUS={cpu_list_text(selected['big_cpus'])}",
         f"C03_COMPACT_CPUS={cpu_list_text(selected['compact_cpus'])}",
         "C03_THREADS_BIG=4",
         "C03_THREADS_ALL=12",
-        f"C03_SERVER_BIN={shlex.quote(build['server_binary']['resolved_path'])}",
-        f"C03_MODEL={shlex.quote(model['resolved_path'])}",
+        f"C03_SERVER_BIN={shlex.quote(server_bin)}",
+        f"C03_MODEL={shlex.quote(model_path)}",
         "",
     ))
 
